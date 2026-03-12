@@ -12,19 +12,6 @@ defmodule BotArmyJobApplications do
   - Kanban dashboard for pipeline tracking
   - GTD Bot integration for action items
 
-  ## Starting the Application
-
-      BotArmyJobApplications.start_link([])
-
+  The bot is started as part of the OTP application tree via BotArmyJobApplications.Application.
   """
-
-  def start_link(opts) do
-    Supervisor.start_link(
-      [
-        BotArmyJobApplications.Repo,
-        {BotArmyJobApplications.NATS.Consumer, []}
-      ],
-      Supervisor.init_opts(opts)
-    )
-  end
 end

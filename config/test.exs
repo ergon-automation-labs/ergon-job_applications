@@ -10,4 +10,9 @@ config :bot_army_job_applications, BotArmyJobApplications.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 1
 
+# Wire up Mox mocks for stores
+config :bot_army_job_applications,
+  resume_store: BotArmyJobApplications.ResumeStoreMock,
+  listing_store: BotArmyJobApplications.ListingStoreMock
+
 config :logger, level: :warning
