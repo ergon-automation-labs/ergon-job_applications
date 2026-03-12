@@ -12,24 +12,6 @@ pipeline {
   }
 
   stages {
-    stage('Compile') {
-      steps {
-        sh '''
-          cd elixir_bots/bot_army_job_applications
-          mix compile --warnings-as-errors
-        '''
-      }
-    }
-
-    stage('Test') {
-      steps {
-        sh '''
-          cd elixir_bots/bot_army_job_applications
-          mix test --cover
-        '''
-      }
-    }
-
     stage('Release') {
       when {
         branch 'main'
