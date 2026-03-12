@@ -1,0 +1,27 @@
+# Elixir
+_build/
+.elixir_ls/
+*.beam
+*.ez
+
+# Dependencies
+/deps/
+/dev/
+
+# Test coverage
+/cover/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env files
+.env
+.env.local
+
+# Mix
+*.mix.lock
