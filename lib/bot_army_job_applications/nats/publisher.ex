@@ -54,10 +54,13 @@ defmodule BotArmyJobApplications.NATS.Publisher do
 
   @doc """
   Publish an LLM request for artifact generation.
+
+  Sends to llm.prompt.submit which calls the LLM with the given text.
+  Response will be published on events.llm.completion with source_metadata preserved.
   """
   def publish_llm_request(payload, source_domain, application_id) do
     request = %{
-      "event" => "llm.response.parse",
+      "event" => "llm.prompt.submit",
       "event_id" => UUID.uuid4() |> to_string(),
       "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
       "source" => "bot_army_job_applications",
@@ -115,7 +118,7 @@ defmodule BotArmyJobApplications.NATS.Publisher do
       "job.application.state.updated" -> "events.job.application.state.updated"
       "job.application.artifact.result" -> "events.job.application.artifact.result"
       "job.error" -> "events.job.error"
-      "llm.response.parse" -> "llm.response.parse"
+      "llm.prompt.submit" -> "llm.prompt.submit"
       "gtd.inbox.add" -> "gtd.inbox.add"
       _ -> "events.job.unknown"
     end

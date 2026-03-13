@@ -53,54 +53,60 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   @doc """
   Handle JD analysis response.
 
-  Receives LLM-extracted JD tags and initiates resume composition.
+  Receives LLM-generated response with JD tags and initiates resume composition.
   """
   def handle_jd_analysis_response(message) do
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     payload = message["payload"]
 
-    case BotArmyJobApplications.ApplicationServer.get(application_id) do
-      {:ok, application} ->
-        jd_tags = payload["tags"] || []
+    # Extract JSON from LLM response text
+    case extract_json_field(payload["text"], "tags") do
+      {:ok, jd_tags} ->
+        case BotArmyJobApplications.ApplicationServer.get(application_id) do
+          {:ok, application} ->
+            case resume_store().get(application["resume_id"]) do
+              {:ok, resume} ->
+                # Compose resume for this JD
+                composed = BotArmyJobApplications.ResumeComposer.compose(resume, jd_tags)
 
-        case resume_store().get(application["resume_id"]) do
-          {:ok, resume} ->
-            # Compose resume for this JD
-            composed = BotArmyJobApplications.ResumeComposer.compose(resume, jd_tags)
+                # Update application with JD tags and coverage score
+                BotArmyJobApplications.ApplicationServer.set_artifacts(
+                  application_id,
+                  %{
+                    "jd_tags" => jd_tags,
+                    "coverage_score" => composed["coverage_score"]
+                  }
+                )
 
-            # Update application with JD tags and coverage score
-            BotArmyJobApplications.ApplicationServer.set_artifacts(
-              application_id,
-              %{
-                "jd_tags" => jd_tags,
-                "coverage_score" => composed["coverage_score"]
-              }
-            )
+                # Initiate cover letter generation
+                initiate_cover_letter_generation(application, composed, jd_tags, application_id)
 
-            # Initiate cover letter generation
-            initiate_cover_letter_generation(application, composed, jd_tags, application_id)
+              {:error, :not_found} ->
+                Logger.error("Resume not found during JD analysis")
+            end
 
           {:error, :not_found} ->
-            Logger.error("Resume not found during JD analysis")
+            Logger.error("Application not found during JD analysis: #{application_id}")
         end
 
-      {:error, :not_found} ->
-        Logger.error("Application not found during JD analysis: #{application_id}")
+      {:error, reason} ->
+        Logger.error("Failed to extract JD tags from LLM response: #{inspect(reason)}")
     end
   end
 
   @doc """
   Handle cover letter response.
 
-  Receives generated cover letter and completes artifact generation.
+  Receives LLM-generated cover letter text and completes artifact generation.
   """
   def handle_cover_letter_response(message) do
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     payload = message["payload"]
 
-    cover_letter_md = payload["cover_letter_md"]
+    # LLM returns the cover letter text directly
+    cover_letter_md = payload["text"] || ""
 
     case BotArmyJobApplications.ApplicationServer.get(application_id) do
       {:ok, application} ->
@@ -152,13 +158,21 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   defp initiate_jd_analysis(application, _resume, event_id) do
     jd_text = application["jd_text"] || ""
 
-    # Request JD analysis from LLM Proxy
+    # Build JD analysis prompt for LLM
+    prompt = """
+    Extract the most important skills, technologies, and qualifications from this job description.
+    Return the result as JSON with a "tags" array of strings.
+
+    Job Description:
+    #{jd_text}
+
+    Return only valid JSON in this format:
+    {"tags": ["tag1", "tag2", "tag3", ...]}
+    """
+
     llm_payload = %{
-      "text" => jd_text,
-      "task" => "extract_tags",
-      "output_schema" => %{
-        "tags" => ["string"]
-      }
+      "text" => prompt,
+      "prompt_id" => "jd_analysis_#{application["id"]}"
     }
 
     case BotArmyJobApplications.NATS.Publisher.publish_llm_request(
@@ -189,21 +203,36 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
     selected_skills = composed["skills"] |> Enum.take(5)
 
+    bullets_text = selected_bullets
+    |> Enum.map(fn b -> "- #{b["selected_text"]}" end)
+    |> Enum.join("\n")
+
+    skills_text = selected_skills |> Enum.join(", ")
+
+    # Build cover letter prompt for LLM
+    prompt = """
+    Write a professional cover letter for the following position. \
+    Use the provided resume excerpts and tailor the letter to the job description keywords.
+
+    Company: #{application["company"]}
+    Position: #{application["role_title"]}
+    Coverage Score: #{composed["coverage_score"]}%
+
+    Key Job Requirements (tags): #{Enum.join(jd_tags, ", ")}
+
+    Relevant Resume Bullets:
+    #{bullets_text}
+
+    Relevant Skills: #{skills_text}
+
+    Resume Summary: #{composed["summary"]}
+
+    Write a compelling cover letter in markdown format. Return only the markdown content, no code blocks.
+    """
+
     llm_payload = %{
-      "context" => %{
-        "company" => application["company"],
-        "role_title" => application["role_title"],
-        "jd_text" => application["jd_text"],
-        "jd_tags" => jd_tags,
-        "resume_summary" => composed["summary"],
-        "selected_bullets" => selected_bullets,
-        "selected_skills" => selected_skills,
-        "coverage_score" => composed["coverage_score"]
-      },
-      "task" => "generate_cover_letter",
-      "output_schema" => %{
-        "cover_letter_md" => "string"
-      }
+      "text" => prompt,
+      "prompt_id" => "cover_letter_#{application_id}"
     }
 
     case BotArmyJobApplications.NATS.Publisher.publish_llm_request(
@@ -276,5 +305,33 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
   defp get_node_name do
     node() |> Atom.to_string()
+  end
+
+  defp extract_json_field(text, field_name) when is_binary(text) do
+    # Try to extract JSON from text (may be wrapped in code fences)
+    text_clean = String.trim(text)
+
+    # Remove markdown code fences if present
+    json_text = case text_clean do
+      "```json\n" <> rest -> String.slice(rest, 0..-5//-1)  # Remove trailing ```
+      "```" <> rest -> String.slice(rest, 0..-5//-1)
+      _ -> text_clean
+    end
+
+    case Jason.decode(json_text) do
+      {:ok, data} when is_map(data) ->
+        case Map.get(data, field_name) do
+          value when is_list(value) -> {:ok, value}
+          value when is_binary(value) -> {:ok, [value]}
+          _ -> {:error, :field_not_found}
+        end
+
+      {:error, _} ->
+        {:error, :invalid_json}
+    end
+  end
+
+  defp extract_json_field(_, _) do
+    {:error, :invalid_input}
   end
 end

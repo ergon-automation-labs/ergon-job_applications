@@ -6,7 +6,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   - job.application.create — new application
   - job.application.command.transition — state transitions
   - job.application.artifact.request — artifact generation
-  - events.llm.response.parsed — LLM responses (routed by source_domain)
+  - events.llm.completion — LLM responses (routed by source_metadata.source_domain)
   - job.pipeline.query — request/reply queries
 
   Phase 1 (manual pipeline): Minimal subscriptions for artifact generation.
@@ -39,7 +39,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.application.artifact.request" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
 
-      "llm.response.parsed" ->
+      "llm.completion" ->
         source_domain = source_metadata["source_domain"]
         route_llm_response(source_domain, message)
 
@@ -89,7 +89,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.application.create",
             "job.application.command.transition",
             "job.application.artifact.request",
-            "events.llm.response.parsed",
+            "events.llm.completion",
             "job.pipeline.query"
           ]
           |> Enum.map(fn subject ->
