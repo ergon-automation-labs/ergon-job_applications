@@ -12,6 +12,10 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
 
   @gtd_trigger_states ["phone_screen", "technical", "offer"]
 
+  defp application_store do
+    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+  end
+
   @doc """
   Handle application creation.
 
@@ -128,36 +132,23 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   end
 
   defp create_application(payload) do
-    application_id = Ecto.UUID.generate()
-
-    changeset = BotArmyJobApplications.Schemas.Application.changeset(
-      %BotArmyJobApplications.Schemas.Application{id: application_id},
-      %{
-        "company" => payload["company"],
-        "role_title" => payload["role_title"],
-        "listing_id" => Map.get(payload, "listing_id"),
-        "jd_text" => Map.get(payload, "jd_text"),
-        "jd_url" => Map.get(payload, "jd_url"),
-        "salary_range" => Map.get(payload, "salary_range"),
-        "state" => "identified",
-        "history" => [
-          %{
-            "from_state" => nil,
-            "to_state" => "identified",
-            "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
-            "metadata" => %{"reason" => "creation"}
-          }
-        ]
-      }
-    )
-
-    case BotArmyJobApplications.Repo.insert(changeset) do
-      {:ok, db_application} ->
-        {:ok, application_to_map(db_application)}
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
+    application_store().create(%{
+      "company" => payload["company"],
+      "role_title" => payload["role_title"],
+      "listing_id" => Map.get(payload, "listing_id"),
+      "jd_text" => Map.get(payload, "jd_text"),
+      "jd_url" => Map.get(payload, "jd_url"),
+      "salary_range" => Map.get(payload, "salary_range"),
+      "state" => "identified",
+      "history" => [
+        %{
+          "from_state" => nil,
+          "to_state" => "identified",
+          "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
+          "metadata" => %{"reason" => "creation"}
+        }
+      ]
+    })
   end
 
   defp publish_application_created(application, event_id) do
@@ -239,28 +230,6 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     }
 
     BotArmyJobApplications.NATS.Publisher.publish(gtd_event)
-  end
-
-  defp application_to_map(%BotArmyJobApplications.Schemas.Application{} = app) do
-    %{
-      "id" => app.id |> to_string(),
-      "listing_id" => app.listing_id,
-      "company" => app.company,
-      "role_title" => app.role_title,
-      "jd_url" => app.jd_url,
-      "jd_text" => app.jd_text,
-      "jd_tags" => app.jd_tags,
-      "coverage_score" => app.coverage_score,
-      "salary_range" => app.salary_range,
-      "strategy" => app.strategy,
-      "state" => app.state,
-      "history" => app.history || [],
-      "pending_signal" => app.pending_signal,
-      "next_action" => app.next_action,
-      "artifacts" => app.artifacts,
-      "created_at" => app.inserted_at |> NaiveDateTime.to_iso8601(),
-      "updated_at" => app.updated_at |> NaiveDateTime.to_iso8601()
-    }
   end
 
   defp get_node_name do

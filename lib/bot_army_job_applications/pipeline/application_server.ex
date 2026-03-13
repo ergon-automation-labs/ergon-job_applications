@@ -16,6 +16,10 @@ defmodule BotArmyJobApplications.ApplicationServer do
   use GenServer
   require Logger
 
+  defp application_store do
+    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+  end
+
   def start_link(application_id) do
     GenServer.start_link(
       __MODULE__,
@@ -130,6 +134,9 @@ defmodule BotArmyJobApplications.ApplicationServer do
             updated_app = schema_to_map(updated_db_app)
             Logger.info("Transitioned application #{state["id"]} from #{from_state} to #{to_state}")
 
+            # Sync to store
+            application_store().update(state["id"], updated_app)
+
             # If terminal state, stop self
             if BotArmyJobApplications.Commands.terminal?(to_state) do
               Logger.info("Application #{state["id"]} reached terminal state: #{to_state}")
@@ -164,6 +171,8 @@ defmodule BotArmyJobApplications.ApplicationServer do
       {:ok, updated_db_app} ->
         updated_app = schema_to_map(updated_db_app)
         Logger.debug("Set pending signal for application #{state["id"]}")
+        # Sync to store
+        application_store().update(state["id"], updated_app)
         {:reply, {:ok, updated_app}, updated_app}
 
       {:error, changeset} ->
@@ -186,6 +195,8 @@ defmodule BotArmyJobApplications.ApplicationServer do
       {:ok, updated_db_app} ->
         updated_app = schema_to_map(updated_db_app)
         Logger.debug("Cleared pending signal for application #{state["id"]}")
+        # Sync to store
+        application_store().update(state["id"], updated_app)
         {:reply, {:ok, updated_app}, updated_app}
 
       {:error, changeset} ->
@@ -208,6 +219,8 @@ defmodule BotArmyJobApplications.ApplicationServer do
       {:ok, updated_db_app} ->
         updated_app = schema_to_map(updated_db_app)
         Logger.info("Set artifacts for application #{state["id"]}")
+        # Sync to store
+        application_store().update(state["id"], updated_app)
         {:reply, {:ok, updated_app}, updated_app}
 
       {:error, changeset} ->

@@ -49,7 +49,8 @@ defmodule BotArmyJobApplications.Application do
     else
       [
         {BotArmyJobApplications.ResumeStore, []},
-        {BotArmyJobApplications.ListingStore, []} | children
+        {BotArmyJobApplications.ListingStore, []},
+        {BotArmyJobApplications.ApplicationStore, []} | children
       ]
     end
   end
