@@ -14,7 +14,7 @@ pipeline {
 
   environment {
     BOT_NAME = 'job_applications'
-    STATE_NAME = 'bots.job_applications'
+    STATE_NAME = 'job_applications'
     RELEASE_DIR = "/opt/ergon/releases/${BOT_NAME}"
     GITHUB_REPO = "ergon-automation-labs/ergon_job_applications"
     SALT_TARGET = '-G bot_army_node_type:air'
