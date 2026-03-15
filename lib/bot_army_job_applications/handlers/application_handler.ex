@@ -68,8 +68,8 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
             # Publish state updated event
             publish_state_updated(application, event_id)
 
-            # Handle GTD integration
-            if to_state in @gtd_trigger_states do
+            # Handle GTD integration (only for valid applications)
+            if to_state in @gtd_trigger_states and is_valid_for_gtd?(application) do
               create_gtd_task(application, to_state)
             end
 
@@ -230,6 +230,52 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     }
 
     BotArmyJobApplications.NATS.Publisher.publish(gtd_event)
+  end
+
+  defp is_valid_for_gtd?(application) do
+    company = String.trim(application["company"] || "")
+    role_title = String.trim(application["role_title"] || "")
+
+    # Reject if either field is too short (likely test/dummy data)
+    # Min 3 chars for realistic company/role names
+    is_company_valid = String.length(company) >= 3
+    is_role_valid = String.length(role_title) >= 3
+
+    # Reject obviously fake combinations (e.g., "Buy" + "milk")
+    is_not_suspicious = not is_suspicious_combo(company, role_title)
+
+    unless is_company_valid and is_role_valid and is_not_suspicious do
+      Logger.warning(
+        "Filtered test/dummy application from GTD integration: " <>
+        "company='#{company}', role_title='#{role_title}'"
+      )
+    end
+
+    is_company_valid and is_role_valid and is_not_suspicious
+  end
+
+  defp is_suspicious_combo(company, role_title) do
+    # List of patterns that indicate test/dummy data
+    suspicious_patterns = [
+      "buy",
+      "test",
+      "dummy",
+      "fake",
+      "sample",
+      "example",
+      "milk",
+      "foo",
+      "bar",
+      "baz"
+    ]
+
+    company_lower = String.downcase(company)
+    role_lower = String.downcase(role_title)
+
+    # Check if either field matches suspicious patterns
+    Enum.any?(suspicious_patterns, fn pattern ->
+      String.contains?(company_lower, pattern) or String.contains?(role_lower, pattern)
+    end)
   end
 
   defp get_node_name do
