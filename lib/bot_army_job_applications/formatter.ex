@@ -23,20 +23,10 @@ defmodule BotArmyJobApplications.Formatter do
     )
   end
 
-  @doc """
-  Format application submitted notification.
-
-  Used when an application is successfully submitted.
-  """
   def format(:application_submitted, %{"title" => title, "company" => company}) do
     Formatter.with_symbol(:job_bot, "Application sent: #{title} at #{company}. One down.")
   end
 
-  @doc """
-  Format interview scheduled notification.
-
-  Used when an interview is confirmed for a position.
-  """
   def format(:interview_scheduled, %{"title" => title, "company" => company, "date" => date}) do
     Formatter.with_symbol(
       :job_bot,
@@ -44,11 +34,6 @@ defmodule BotArmyJobApplications.Formatter do
     )
   end
 
-  @doc """
-  Format interview feedback notification.
-
-  Used to provide feedback after an interview completes.
-  """
   def format(:interview_feedback, %{"title" => title, "feedback" => feedback}) do
     Formatter.with_symbol(
       :job_bot,
@@ -56,11 +41,6 @@ defmodule BotArmyJobApplications.Formatter do
     )
   end
 
-  @doc """
-  Format offer received notification.
-
-  Used when a job offer comes in.
-  """
   def format(:offer_received, %{"title" => title, "company" => company}) do
     Formatter.with_symbol(
       :job_bot,
@@ -68,11 +48,6 @@ defmodule BotArmyJobApplications.Formatter do
     )
   end
 
-  @doc """
-  Format rejection notification.
-
-  Used when a position is closed or you're no longer in consideration.
-  """
   def format(:rejection, %{"title" => title, "company" => company}) do
     Formatter.with_symbol(
       :job_bot,
@@ -80,11 +55,6 @@ defmodule BotArmyJobApplications.Formatter do
     )
   end
 
-  @doc """
-  Format error notification.
-
-  Used when something goes wrong.
-  """
   def format(:error, %{"message" => message}) do
     Formatter.with_symbol(:job_bot, "Something went wrong: #{message}")
   end
