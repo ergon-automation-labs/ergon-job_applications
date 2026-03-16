@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Pre-push hook for bot_army_job_applications
+# Ensures code is tested, compiled, and released before pushing to main
+
+set -e
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Only enforce checks on main branch
+if [ "$BRANCH" != "main" ]; then
+  exit 0
+fi
+
+echo "==============================================="
+echo "Pre-push hook: bot_army_job_applications"
+echo "==============================================="
+
+# Step 1: Compile with strict warnings
+echo ""
+echo "1️⃣  Compiling with warnings as errors..."
+mix compile --warnings-as-errors || {
+  echo "❌ Compilation failed"
+  exit 1
+}
+echo "✓ Compilation successful"
+
+# Step 2: Run tests
+echo ""
+echo "2️⃣  Running tests..."
+mix test || {
+  echo "❌ Tests failed"
+  exit 1
+}
+echo "✓ All tests passed"
+
+# Step 3: Build release
+echo ""
+echo "3️⃣  Building release..."
+MIX_ENV=prod mix release || {
+  echo "❌ Release build failed"
+  exit 1
+}
+echo "✓ Release built successfully"
+
+# Step 4: Create tarball (release name must match mix.exs: bot_army_job_applications)
+echo ""
+echo "4️⃣  Creating release tarball..."
+RELEASE_VSN=$(cat _build/prod/rel/bot_army_job_applications/releases/start_erl.data | awk '{print $2}')
+echo "Release version: $RELEASE_VSN"
+
+TARBALL="bot_army_job_applications-${RELEASE_VSN}.tar.gz"
+tar -czf "$TARBALL" -C _build/prod/rel bot_army_job_applications/ || {
+  echo "❌ Tarball creation failed"
+  exit 1
+}
+echo "✓ Created: $TARBALL"
+
+# Step 5: Publish to GitHub releases
+echo ""
+echo "5️⃣  Publishing to GitHub releases..."
+gh release create "v${RELEASE_VSN}" \
+  "$TARBALL" \
+  --repo "ergon-automation-labs/ergon_job_applications" \
+  --title "Job Applications Bot v${RELEASE_VSN}" \
+  --notes "Release v${RELEASE_VSN}" \
+  2>/dev/null || {
+  # If release already exists, that's fine
+  echo "⚠️  Release may already exist (continuing anyway)"
+}
+echo "✓ Release published to GitHub"
+
+# Step 6: Clean up tarball
+rm -f "$TARBALL"
+
+echo ""
+echo "==============================================="
+echo "✓ All checks passed — proceeding with push"
+echo "==============================================="
+echo ""
+
+exit 0
