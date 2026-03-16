@@ -70,8 +70,9 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
         if stage != "", do: Map.put(create_payload, "next_action", stage), else: create_payload
       create_payload =
         if notes != "", do: Map.put(create_payload, "strategy", notes), else: create_payload
+      jd_url = trim(payload["jd_url"] || "")
       create_payload =
-        if jd_url = trim(payload["jd_url"]), jd_url != "", do: Map.put(create_payload, "jd_url", jd_url), else: create_payload
+        if jd_url != "", do: Map.put(create_payload, "jd_url", jd_url), else: create_payload
       create_payload =
         case {payload["salary_min"], payload["salary_max"]} do
           {min, max} when is_number(min) and is_number(max) -> Map.put(create_payload, "salary_range", %{"min" => min, "max" => max})
