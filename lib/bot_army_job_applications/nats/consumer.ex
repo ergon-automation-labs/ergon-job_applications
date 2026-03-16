@@ -5,7 +5,11 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   Subscribes to:
   - job.application.create — new application
   - job.application.command.transition — state transitions
+  - job.application.command.rank — ranking request
   - job.application.artifact.request — artifact generation
+  - job.resume.upload — resume file upload
+  - job.resume.list — list all resumes (request/reply)
+  - job.resume.get — get single resume (request/reply)
   - events.llm.completion — LLM responses (routed by source_metadata.source_domain)
   - job.pipeline.query — request/reply queries
 
@@ -36,8 +40,21 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.application.command.transition" ->
         BotArmyJobApplications.Handlers.ApplicationHandler.handle_transition(message)
 
+      "job.application.command.rank" ->
+        BotArmyJobApplications.Handlers.RankingHandler.handle_rank(message)
+
       "job.application.artifact.request" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
+
+      "job.listings.ingest" ->
+        payload = message["payload"] || message
+        BotArmyJobApplications.Handlers.IngestHandler.handle_ingest(payload)
+
+      "job.listings.fetch.request" ->
+        BotArmyJobApplications.Ingestion.Worker.run_fetch()
+
+      "job.resume.upload" ->
+        BotArmyJobApplications.Handlers.ResumeParseHandler.handle_upload(message)
 
       "llm.completion" ->
         source_domain = source_metadata["source_domain"]
@@ -57,6 +74,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
       "cover_letter" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_cover_letter_response(message)
+
+      "resume_parse" ->
+        BotArmyJobApplications.Handlers.ResumeParseHandler.handle_parse_response(message)
 
       _ ->
         Logger.debug("Unknown LLM response source_domain: #{source_domain}")
@@ -88,9 +108,18 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           [
             "job.application.create",
             "job.application.command.transition",
+            "job.application.command.rank",
             "job.application.artifact.request",
+            "job.listings.ingest",
+            "job.listings.fetch.request",
+            "job.resume.upload",
+            "job.resume.list",
+            "job.resume.get",
             "events.llm.completion",
-            "job.pipeline.query"
+            "job.pipeline.query",
+            "job.application.get",
+            "job.application.list",
+            "job.listings.list"
           ]
           |> Enum.map(fn subject ->
             case Gnat.sub(conn, self(), subject) do
@@ -128,6 +157,101 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         status: "ok",
         applications_count: get_applications_count()
       })
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.application.get", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: return application by id for LiveView detail page
+    response =
+      case Jason.decode(body) do
+        {:ok, %{"application_id" => app_id}} when is_binary(app_id) ->
+          case application_store().get(app_id) do
+            {:ok, app} -> Jason.encode!(%{"ok" => true, "application" => app})
+            {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "not_found"})
+          end
+        _ ->
+          Jason.encode!(%{"ok" => false, "error" => "missing application_id"})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.listings.list", reply_to: reply_to} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: return list of listings for LiveView
+    response =
+      case listing_store().list([]) do
+        {:ok, listings} -> Jason.encode!(%{"ok" => true, "listings" => listings})
+        _ -> Jason.encode!(%{"ok" => false, "listings" => []})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.application.list", reply_to: reply_to} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: return list of applications for LiveView
+    response =
+      case application_store().list() do
+        {:ok, applications} -> Jason.encode!(%{"ok" => true, "applications" => applications})
+        _ -> Jason.encode!(%{"ok" => false, "applications" => []})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.resume.list", reply_to: reply_to} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: return list of resumes for surface
+    response =
+      case resume_store().list() do
+        {:ok, resumes} -> Jason.encode!(%{"ok" => true, "resumes" => resumes})
+        _ -> Jason.encode!(%{"ok" => false, "resumes" => []})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.resume.get", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: return resume by id for surface detail view
+    response =
+      case Jason.decode(body) do
+        {:ok, %{"resume_id" => resume_id}} when is_binary(resume_id) ->
+          case resume_store().get(resume_id) do
+            {:ok, resume} -> Jason.encode!(%{"ok" => true, "resume" => resume})
+            {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "not_found"})
+          end
+        _ ->
+          Jason.encode!(%{"ok" => false, "error" => "missing resume_id"})
+      end
 
     if state.conn do
       Gnat.pub(state.conn, reply_to, response)
@@ -177,5 +301,17 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     end
   rescue
     _ -> 0
+  end
+
+  defp application_store do
+    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+  end
+
+  defp listing_store do
+    Application.get_env(:bot_army_job_applications, :listing_store, BotArmyJobApplications.ListingStore)
+  end
+
+  defp resume_store do
+    Application.get_env(:bot_army_job_applications, :resume_store, BotArmyJobApplications.ResumeStore)
   end
 end
