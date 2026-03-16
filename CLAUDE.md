@@ -142,6 +142,46 @@ mix deps.get
 mix test
 ```
 
+### Board Discovery & Ingestion Configuration
+
+The bot uses a two-phase approach to keep job boards up to date:
+
+**Phase 1A: Discover Boards (Local)**
+- Run `make discover-boards` to test Greenhouse and Lever public APIs
+- Returns list of active boards with job counts
+- No database changes, no deployment needed
+- Useful for understanding what boards are available
+
+**Phase 1B: Sync Boards to Production (Update Salt Pillar)**
+- Run `make sync-boards` to discover boards AND update Salt pillar
+- Generates YAML configuration: `bot_army_infra/salt/pillar/job_applications.sls`
+- Auto-commits changes with board count in message
+- Requires: `bot_army_infra` sibling directory exists and is a git repo
+- Next step: `cd ../bot_army_infra && git push origin main`
+- Jenkins automatically deploys when push completes
+
+**Available Make Targets:**
+| Command | What It Does |
+|---------|-------------|
+| `make discover-boards` | List active boards + job counts (no changes) |
+| `make discover-boards-yaml` | Same as above, output to /tmp/ingestion_boards.yaml |
+| `make sync-boards-dry-run` | Preview what would be written to Salt pillar (no changes) |
+| `make sync-boards` | Discover boards + update Salt pillar + auto-commit |
+
+**Companies Tested:** 23 across AI/ML, DevTools, Infrastructure categories (hardcoded in `@companies` map)
+
+**Implementation:** `lib/mix/tasks/discover_boards.ex` and `lib/mix/tasks/sync_boards_to_salt.ex`
+- Uses Erlang `:inets` and `:httpc` (available in Mix environment)
+- Tests Greenhouse: `https://boards-api.greenhouse.io/v1/boards/{token}/jobs`
+- Tests Lever: `https://api.lever.co/v0/postings/{site}`
+- 5-second timeout per board, continues on error
+
+**Adding New Companies:**
+1. Add tuple to `@companies` map: `{"CompanyName", "slug", "greenhouse" | "lever"}`
+2. Test with `make discover-boards-yaml` to verify board exists
+3. Run `make sync-boards` to push to production
+4. Salt pillar auto-syncs to all minions
+
 ### Key Concepts
 
 **Resume as Structured Data:**

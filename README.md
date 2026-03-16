@@ -47,6 +47,85 @@ The Job Applications Bot handles:
 - **Developer Guide:** [CLAUDE.md](./CLAUDE.md)
 - **LLM Proxy:** [llm-proxy.md](../docs/north_star_docs/llm-proxy.md)
 
+## Board Discovery & Ingestion Setup
+
+The bot automatically discovers active job boards on **Greenhouse** and **Lever**, tests them against the public APIs, and updates the Salt pillar configuration for production deployment.
+
+### What It Does
+
+- **Discovers** 23+ companies across AI/ML, DevTools, and Infrastructure categories
+- **Tests** Greenhouse and Lever public APIs (no auth required)
+- **Generates** YAML configuration ready for Salt deployment
+- **Updates** Salt pillar at `bot_army_infra/salt/pillar/job_applications.sls`
+- **Auto-commits** changes with board count in git message
+
+### Quick Commands
+
+```bash
+# Preview discovered boards (no changes)
+make sync-boards-dry-run
+
+# Discover boards and show as YAML
+make discover-boards-yaml
+
+# Auto-discover, update Salt pillar, and commit
+make sync-boards
+
+# Run discovery with specific categories
+mix job_applications.discover_boards --categories ai,devtools
+```
+
+### Setup Workflow
+
+1. **Discover & Preview**
+   ```bash
+   cd /Users/abby/code/elixir_bots/bot_army_job_applications
+   make sync-boards-dry-run
+   # Review output — shows which boards are active and job counts
+   ```
+
+2. **Update Salt Pillar**
+   ```bash
+   make sync-boards
+   # Updates ../bot_army_infra/salt/pillar/job_applications.sls
+   # Creates git commit with board count
+   ```
+
+3. **Deploy to Production**
+   ```bash
+   cd ../bot_army_infra
+   git push origin main
+   # Jenkins automatically triggers deployment
+
+   make deploy-bot BOT=job_applications
+   # Or wait for Jenkins to auto-deploy
+   ```
+
+4. **Verify in Production**
+   ```bash
+   # Check NATS can reach the bot
+   nats request --server nats://localhost:4222 job.application.list '{}' --timeout 3s
+   # Expect: {"ok":true,"applications":[...]}
+   ```
+
+### Supported Companies
+
+**AI/ML** (7): Anthropic, Hugging Face, Scale AI, Together AI, Replicate, CoreWeave, Lightning AI
+
+**DevTools** (8): Cursor, Replit, JetBrains, Vercel, Netlify, Astro, Prisma, Svelte
+
+**Infrastructure** (8): Cloudflare, HashiCorp, Fly.io, Mux, Supabase, PlanetScale, Railway, Wiz
+
+### How to Add Companies
+
+Edit `lib/mix/tasks/discover_boards.ex` and `lib/mix/tasks/sync_boards_to_salt.ex`:
+
+1. Add a `{name, slug, platform}` tuple to the `@companies` map (e.g., `{"MyCompany", "myco", "greenhouse"}`)
+2. Run `make sync-boards-dry-run` to verify the board is active
+3. Run `make sync-boards` to update Salt pillar
+
+**Note:** Slug is the Greenhouse board token or Lever site name (usually lowercase company name).
+
 ## Architecture
 
 See [CLAUDE.md](./CLAUDE.md) for:
