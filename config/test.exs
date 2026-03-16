@@ -13,6 +13,7 @@ config :bot_army_job_applications, BotArmyJobApplications.Repo,
 # Wire up Mox mocks for stores
 config :bot_army_job_applications,
   resume_store: BotArmyJobApplications.ResumeStoreMock,
-  listing_store: BotArmyJobApplications.ListingStoreMock
+  listing_store: BotArmyJobApplications.ListingStoreMock,
+  application_store: BotArmyJobApplications.ApplicationStoreMock
 
 config :logger, level: :warning

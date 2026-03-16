@@ -47,6 +47,97 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   end
 
   @doc """
+  Handle confirmation of a pending email signal.
+
+  Reads the pending signal's proposed transition and applies it,
+  then clears the pending signal.
+  """
+  def handle_confirm_signal(message) do
+    payload = message["payload"]
+    event_id = message["event_id"]
+
+    case validate_application_payload(payload) do
+      :ok ->
+        application_id = payload["application_id"]
+
+        case application_store().get(application_id) do
+          {:ok, application} ->
+            pending_signal = application["pending_signal"]
+
+            if pending_signal do
+              to_state = pending_signal["proposed_transition"]
+              metadata = %{"triggered_by" => "email_signal_confirmed", "signal_type" => pending_signal["type"]}
+
+              # Transition to the proposed state
+              case BotArmyJobApplications.ApplicationServer.transition(application_id, to_state, metadata) do
+                {:ok, _updated_app} ->
+                  # Clear the pending signal
+                  case application_store().update(application_id, %{"pending_signal" => nil}) do
+                    {:ok, updated_app} ->
+                      Logger.info("Confirmed email signal for application: #{application_id}, transitioned to #{to_state}")
+                      publish_signal_cleared(updated_app, event_id)
+
+                    {:error, reason} ->
+                      Logger.error("Failed to clear pending signal for #{application_id}: #{inspect(reason)}")
+                  end
+
+                {:error, reason} ->
+                  Logger.error("Failed to transition application #{application_id}: #{inspect(reason)}")
+                  BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Failed to confirm signal")
+              end
+            else
+              Logger.warning("No pending signal found for application: #{application_id}")
+            end
+
+          {:error, :not_found} ->
+            Logger.error("Application not found: #{application_id}")
+            BotArmyJobApplications.NATS.Publisher.publish_error(event_id, :not_found, "Application not found")
+
+          {:error, reason} ->
+            Logger.error("Failed to get application #{application_id}: #{inspect(reason)}")
+            BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Failed to confirm signal")
+        end
+
+      {:error, reason} ->
+        Logger.warning("Invalid confirm signal payload: #{inspect(reason)}")
+        BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Invalid confirm signal data")
+    end
+  end
+
+  @doc """
+  Handle dismissal of a pending email signal.
+
+  Clears the pending signal without applying any state transition.
+  """
+  def handle_dismiss_signal(message) do
+    payload = message["payload"]
+    event_id = message["event_id"]
+
+    case validate_application_payload(payload) do
+      :ok ->
+        application_id = payload["application_id"]
+
+        case application_store().update(application_id, %{"pending_signal" => nil}) do
+          {:ok, updated_app} ->
+            Logger.info("Dismissed email signal for application: #{application_id}")
+            publish_signal_cleared(updated_app, event_id)
+
+          {:error, :not_found} ->
+            Logger.error("Application not found: #{application_id}")
+            BotArmyJobApplications.NATS.Publisher.publish_error(event_id, :not_found, "Application not found")
+
+          {:error, reason} ->
+            Logger.error("Failed to dismiss signal for #{application_id}: #{inspect(reason)}")
+            BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Failed to dismiss signal")
+        end
+
+      {:error, reason} ->
+        Logger.warning("Invalid dismiss signal payload: #{inspect(reason)}")
+        BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Invalid dismiss signal data")
+    end
+  end
+
+  @doc """
   Handle application state transition.
 
   Validates transition, updates database, publishes events, and handles GTD integration.
@@ -123,6 +214,16 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   end
 
   defp validate_transition_payload(_), do: {:error, :invalid_payload}
+
+  defp validate_application_payload(payload) when is_map(payload) do
+    with :ok <- require_field(payload, "application_id") do
+      :ok
+    else
+      err -> err
+    end
+  end
+
+  defp validate_application_payload(_), do: {:error, :invalid_payload}
 
   defp require_field(payload, field) do
     case payload do
@@ -276,6 +377,26 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     Enum.any?(suspicious_patterns, fn pattern ->
       String.contains?(company_lower, pattern) or String.contains?(role_lower, pattern)
     end)
+  end
+
+  defp publish_signal_cleared(application, event_id) do
+    event = %{
+      "event" => "job.application.signal.cleared",
+      "event_id" => UUID.uuid4() |> to_string(),
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_job_applications",
+      "source_node" => get_node_name(),
+      "triggered_by" => "job_applications.bot",
+      "schema_version" => "1.0",
+      "payload" => %{
+        "application_id" => application["id"],
+        "company" => application["company"],
+        "role_title" => application["role_title"],
+        "triggered_by_event_id" => event_id
+      }
+    }
+
+    BotArmyJobApplications.NATS.Publisher.publish(event)
   end
 
   defp get_node_name do

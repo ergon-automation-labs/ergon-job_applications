@@ -216,7 +216,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
     Company: #{application["company"]}
     Position: #{application["role_title"]}
-    Coverage Score: #{composed["coverage_score"]}%
+    Coverage Score: #{coverage_pct(composed["coverage_score"])}%
 
     Key Job Requirements (tags): #{Enum.join(jd_tags, ", ")}
 
@@ -282,6 +282,9 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   end
 
   defp publish_artifact_result(application) do
+    artifacts = application["artifacts"] || %{}
+    coverage = application["coverage_score"] || artifacts["coverage_score"]
+
     event = %{
       "event" => "job.application.artifact.result",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -294,14 +297,17 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
         "application_id" => application["id"],
         "company" => application["company"],
         "role_title" => application["role_title"],
-        "cover_letter_md" => application["artifacts"]["cover_letter_md"],
-        "resume_md" => application["artifacts"]["resume_md"],
-        "coverage_score" => application["coverage_score"]
+        "cover_letter_md" => artifacts["cover_letter_md"],
+        "resume_md" => artifacts["resume_md"],
+        "coverage_score" => coverage
       }
     }
 
     BotArmyJobApplications.NATS.Publisher.publish(event)
   end
+
+  defp coverage_pct(n) when is_number(n) and n >= 0 and n <= 1, do: round(n * 100)
+  defp coverage_pct(_), do: 0
 
   defp get_node_name do
     node() |> Atom.to_string()

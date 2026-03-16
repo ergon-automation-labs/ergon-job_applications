@@ -31,6 +31,16 @@ config :bot_army_job_applications, BotArmyJobApplications.Repo,
 config :logger,
   level: :info
 
+# Job listing ingestion (Phase 2): Greenhouse and Lever boards to fetch.
+# Example:
+#   config :bot_army_job_applications, :ingestion_boards, [
+#     %{source: "greenhouse", board_token: "stripe", company_name: "Stripe"},
+#     %{source: "lever", site: "lever", company_name: "Lever"}
+#   ]
+# Fetch interval: default 6 hours. Set ingestion_interval_ms to 0 to disable periodic fetch (use job.listings.fetch.request to trigger).
+config :bot_army_job_applications, :ingestion_boards, []
+config :bot_army_job_applications, :ingestion_interval_ms, 6 * 60 * 60 * 1000
+
 # Import environment-specific config
 if File.exists?("config/#{Mix.env()}.exs") do
   import_config "#{Mix.env()}.exs"

@@ -43,8 +43,26 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.application.command.rank" ->
         BotArmyJobApplications.Handlers.RankingHandler.handle_rank(message)
 
+      "job.application.command.confirm_signal" ->
+        BotArmyJobApplications.Handlers.ApplicationHandler.handle_confirm_signal(message)
+
+      "job.application.command.dismiss_signal" ->
+        BotArmyJobApplications.Handlers.ApplicationHandler.handle_dismiss_signal(message)
+
       "job.application.artifact.request" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
+
+      "job.email.interview_request" ->
+        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+
+      "job.email.phone_screen" ->
+        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+
+      "job.email.offer" ->
+        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+
+      "job.email.rejection" ->
+        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
 
       "job.listings.ingest" ->
         payload = message["payload"] || message
@@ -109,7 +127,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.application.create",
             "job.application.command.transition",
             "job.application.command.rank",
+            "job.application.command.confirm_signal",
+            "job.application.command.dismiss_signal",
             "job.application.artifact.request",
+            "job.email.interview_request",
+            "job.email.phone_screen",
+            "job.email.offer",
+            "job.email.rejection",
             "job.listings.ingest",
             "job.listings.fetch.request",
             "job.resume.upload",

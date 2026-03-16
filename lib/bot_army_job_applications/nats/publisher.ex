@@ -78,6 +78,43 @@ defmodule BotArmyJobApplications.NATS.Publisher do
   end
 
   @doc """
+  Publish an LLM request with additional metadata.
+
+  Like publish_llm_request, but accepts additional metadata fields to preserve
+  through the LLM response (e.g., file_path, original_filename for resume parsing).
+  """
+  def publish_llm_request_with_metadata(payload, source_domain, application_id, extra_metadata) do
+    source_meta = %{"source_domain" => source_domain}
+    source_meta = if application_id, do: Map.put(source_meta, "application_id", application_id), else: source_meta
+    source_meta = Map.merge(source_meta, extra_metadata)
+
+    request = %{
+      "event" => "llm.prompt.submit",
+      "event_id" => UUID.uuid4() |> to_string(),
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_job_applications",
+      "source_node" => get_node_name(),
+      "triggered_by" => "job_applications.bot",
+      "schema_version" => "1.0",
+      "source_metadata" => source_meta,
+      "payload" => payload
+    }
+
+    publish(request)
+  end
+
+  @doc """
+  Publish a raw listing for ingestion (dedup + store).
+
+  Sends to job.listings.ingest. Consumer will deduplicate and store new listings,
+  then publish events.job.listings.new for each new one.
+  """
+  def publish_listing_ingest(payload) when is_map(payload) do
+    body = Jason.encode!(%{"event" => "job.listings.ingest", "payload" => payload})
+    do_publish("job.listings.ingest", body)
+  end
+
+  @doc """
   Publish an error event.
   """
   def publish_error(event_id, reason, message) do
@@ -117,6 +154,12 @@ defmodule BotArmyJobApplications.NATS.Publisher do
       "job.application.created" -> "events.job.application.created"
       "job.application.state.updated" -> "events.job.application.state.updated"
       "job.application.artifact.result" -> "events.job.application.artifact.result"
+      "job.application.ranked" -> "events.job.application.ranked"
+      "job.application.signal.detected" -> "events.job.application.signal.detected"
+      "job.application.signal.cleared" -> "events.job.application.signal.cleared"
+      "job.listings.new" -> "events.job.listings.new"
+      "job.resume.created" -> "events.job.resume.created"
+      "job.resume.parse.failed" -> "events.job.resume.parse.failed"
       "job.error" -> "events.job.error"
       "llm.prompt.submit" -> "llm.prompt.submit"
       "gtd.inbox.add" -> "gtd.inbox.add"

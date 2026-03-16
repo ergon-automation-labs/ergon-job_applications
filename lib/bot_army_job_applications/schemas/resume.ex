@@ -12,6 +12,8 @@ defmodule BotArmyJobApplications.Schemas.Resume do
   schema "resumes" do
     field :identity, :map
     field :metadata, :map
+    field :source_file_path, :string
+    field :original_filename, :string
 
     timestamps()
   end
@@ -19,7 +21,7 @@ defmodule BotArmyJobApplications.Schemas.Resume do
   @doc false
   def changeset(resume, attrs) do
     resume
-    |> cast(attrs, [:identity, :metadata])
+    |> cast(attrs, [:identity, :metadata, :source_file_path, :original_filename])
     |> validate_required([:identity])
   end
 end

@@ -210,9 +210,14 @@ defmodule BotArmyJobApplications.ApplicationServer do
     app_uuid = Ecto.UUID.cast!(state["id"])
     db_app = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, app_uuid)
 
+    # Merge into existing artifacts; persist coverage_score at application level when present
+    new_artifacts = Map.merge(state["artifacts"] || %{}, artifacts)
+    attrs = %{"artifacts" => new_artifacts}
+    attrs = if Map.has_key?(artifacts, "coverage_score"), do: Map.put(attrs, "coverage_score", artifacts["coverage_score"]), else: attrs
+
     changeset = BotArmyJobApplications.Schemas.Application.changeset(
       db_app,
-      %{"artifacts" => artifacts}
+      attrs
     )
 
     case BotArmyJobApplications.Repo.update(changeset) do

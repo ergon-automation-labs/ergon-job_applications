@@ -27,6 +27,10 @@ defmodule BotArmyJobApplications.ListingStore do
     GenServer.call(@server, {:get, listing_id})
   end
 
+  def get_by_dedup_hash(dedup_hash) when is_binary(dedup_hash) do
+    GenServer.call(@server, {:get_by_dedup_hash, dedup_hash})
+  end
+
   def list(opts \\ []) do
     GenServer.call(@server, {:list, opts})
   end
@@ -142,6 +146,16 @@ defmodule BotArmyJobApplications.ListingStore do
       nil -> {:reply, {:error, :not_found}, state}
       listing -> {:reply, {:ok, listing}, state}
     end
+  end
+
+  @impl true
+  def handle_call({:get_by_dedup_hash, dedup_hash}, _from, state) do
+    result =
+      case BotArmyJobApplications.Repo.get_by(BotArmyJobApplications.Schemas.Listing, dedup_hash: dedup_hash) do
+        nil -> {:error, :not_found}
+        listing -> {:ok, schema_to_map(listing)}
+      end
+    {:reply, result, state}
   end
 
   @impl true

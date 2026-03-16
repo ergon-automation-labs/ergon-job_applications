@@ -21,6 +21,7 @@ defmodule BotArmyJobApplications.Application do
     |> maybe_add_registry()
     |> maybe_add_stores()
     |> maybe_add_supervisor()
+    |> maybe_add_ingestion_worker()
     |> maybe_add_consumer()
 
     opts = [strategy: :one_for_one, name: BotArmyJobApplications.Supervisor]
@@ -68,6 +69,14 @@ defmodule BotArmyJobApplications.Application do
       children
     else
       [{BotArmyJobApplications.NATS.Consumer, []} | children]
+    end
+  end
+
+  defp maybe_add_ingestion_worker(children) do
+    if @env == :test do
+      children
+    else
+      [{BotArmyJobApplications.Ingestion.Worker, []} | children]
     end
   end
 end
