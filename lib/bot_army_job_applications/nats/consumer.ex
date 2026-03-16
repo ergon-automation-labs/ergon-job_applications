@@ -52,6 +52,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.application.artifact.request" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
 
+      "job.digest.request" ->
+        BotArmyJobApplications.Handlers.DigestHandler.handle_request(message)
+
       "job.email.interview_request" ->
         BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
 
@@ -130,6 +133,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.application.command.confirm_signal",
             "job.application.command.dismiss_signal",
             "job.application.artifact.request",
+            "job.digest.request",
             "job.email.interview_request",
             "job.email.phone_screen",
             "job.email.offer",

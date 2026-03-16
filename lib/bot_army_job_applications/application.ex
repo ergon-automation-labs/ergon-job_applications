@@ -22,6 +22,7 @@ defmodule BotArmyJobApplications.Application do
     |> maybe_add_stores()
     |> maybe_add_supervisor()
     |> maybe_add_ingestion_worker()
+    |> maybe_add_digest_scheduler()
     |> maybe_add_consumer()
 
     opts = [strategy: :one_for_one, name: BotArmyJobApplications.Supervisor]
@@ -77,6 +78,14 @@ defmodule BotArmyJobApplications.Application do
       children
     else
       [{BotArmyJobApplications.Ingestion.Worker, []} | children]
+    end
+  end
+
+  defp maybe_add_digest_scheduler(children) do
+    if @env == :test do
+      children
+    else
+      [{BotArmyJobApplications.DigestScheduler, []} | children]
     end
   end
 end
