@@ -33,6 +33,11 @@ defmodule BotArmyJobApplications.ApplicationStore do
   end
 
   @impl BotArmyJobApplications.ApplicationStoreBehaviour
+  def delete(application_id) when is_binary(application_id) do
+    GenServer.call(@server, {:delete, application_id})
+  end
+
+  @impl BotArmyJobApplications.ApplicationStoreBehaviour
   def list do
     GenServer.call(@server, :list)
   end
@@ -150,6 +155,33 @@ defmodule BotArmyJobApplications.ApplicationStore do
     case Map.get(state, application_id) do
       nil -> {:reply, {:error, :not_found}, state}
       application -> {:reply, {:ok, application}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:delete, application_id}, _from, state) do
+    case Map.get(state, application_id) do
+      nil ->
+        {:reply, {:error, :not_found}, state}
+
+      _ ->
+        application_uuid = Ecto.UUID.cast!(application_id)
+        db_application = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_uuid)
+
+        if db_application do
+          case BotArmyJobApplications.Repo.delete(db_application) do
+            {:ok, _} ->
+              new_state = Map.delete(state, application_id)
+              Logger.info("Deleted application from database: #{application_id}")
+              {:reply, :ok, new_state}
+
+            {:error, changeset} ->
+              Logger.error("Failed to delete application: #{inspect(changeset.errors)}")
+              {:reply, {:error, :database_error}, state}
+          end
+        else
+          {:reply, {:error, :not_found}, state}
+        end
     end
   end
 

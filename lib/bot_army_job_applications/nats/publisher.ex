@@ -115,6 +115,15 @@ defmodule BotArmyJobApplications.NATS.Publisher do
   end
 
   @doc """
+  Publish TUI snapshot: %{"applications" => [%{"id" => ..., "company" => ..., ...}, ...]}.
+  Subject: events.job_applications.snapshot (consumed by job-applications-tui).
+  """
+  def publish_snapshot(snapshot) when is_map(snapshot) do
+    body = Jason.encode!(snapshot)
+    do_publish("events.job_applications.snapshot", body)
+  end
+
+  @doc """
   Publish an error event.
   """
   def publish_error(event_id, reason, message) do

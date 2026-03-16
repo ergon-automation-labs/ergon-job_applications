@@ -147,7 +147,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.pipeline.query",
             "job.application.get",
             "job.application.list",
-            "job.listings.list"
+            "job.listings.list",
+            "requests.job_applications.snapshot",
+            "commands.job_applications.create",
+            "commands.job_applications.update",
+            "commands.job_applications.update_status",
+            "commands.job_applications.add_note",
+            "commands.job_applications.delete"
           ]
           |> Enum.map(fn subject ->
             case Gnat.sub(conn, self(), subject) do
@@ -246,6 +252,65 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       Gnat.pub(state.conn, reply_to, response)
     end
 
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "requests.job_applications.snapshot", reply_to: reply_to} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: TUI snapshot format for job-applications-tui
+    snapshot = BotArmyJobApplications.Handlers.TuiCommandHandler.get_snapshot()
+    response = Jason.encode!(snapshot)
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "commands.job_applications.create", body: body} = _msg}, state) do
+    case Jason.decode(body) do
+      {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_create(payload)
+      {:error, _} -> Logger.warning("TUI create: invalid JSON")
+    end
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "commands.job_applications.update", body: body} = _msg}, state) do
+    case Jason.decode(body) do
+      {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_update(payload)
+      {:error, _} -> Logger.warning("TUI update: invalid JSON")
+    end
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "commands.job_applications.update_status", body: body} = _msg}, state) do
+    case Jason.decode(body) do
+      {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_update_status(payload)
+      {:error, _} -> Logger.warning("TUI update_status: invalid JSON")
+    end
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "commands.job_applications.delete", body: body} = _msg}, state) do
+    case Jason.decode(body) do
+      {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_delete(payload)
+      {:error, _} -> Logger.warning("TUI delete: invalid JSON")
+    end
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "commands.job_applications.add_note", body: body} = _msg}, state) do
+    case Jason.decode(body) do
+      {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_add_note(payload)
+      {:error, _} -> Logger.warning("TUI add_note: invalid JSON")
+    end
     {:noreply, state}
   end
 
