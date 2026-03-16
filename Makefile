@@ -93,7 +93,7 @@ release: check
 	MIX_ENV=prod mix release --overwrite
 	@echo ""
 	@echo "✓ Release built successfully"
-	@echo "Location: _build/prod/rel/job_applications_bot/"
+	@echo "Location: _build/prod/rel/bot_army_job_applications/"
 	@echo ""
 
 publish-release: release
@@ -102,19 +102,19 @@ publish-release: release
 	@echo "==============================================="
 	@echo ""
 
-	# Get version from release metadata
-	VERSION=$$(cat _build/prod/rel/job_applications_bot/releases/RELEASES | tail -1 | cut -d' ' -f2); \
-	echo "Version: $$VERSION"; \
+	# Get version from release metadata (release name must match mix.exs)
+	VERSION=$$(cat _build/prod/rel/bot_army_job_applications/releases/RELEASES | tail -1 | cut -d' ' -f2); \
+	echo "Release version: $$VERSION"; \
 	\
 	# Create tarball
 	echo "Creating release tarball..."; \
-	tar -czf job_applications_bot-$$VERSION.tar.gz -C _build/prod/rel job_applications_bot/; \
-	echo "✓ Tarball created: job_applications_bot-$$VERSION.tar.gz"; \
+	tar -czf bot_army_job_applications-$$VERSION.tar.gz -C _build/prod/rel bot_army_job_applications/; \
+	echo "✓ Created: bot_army_job_applications-$$VERSION.tar.gz"; \
 	echo ""; \
 	\
 	# Create GitHub release
-	echo "Creating GitHub release v$$VERSION..."; \
-	gh release create v$$VERSION job_applications_bot-$$VERSION.tar.gz \
+	echo "Publishing to GitHub releases..."; \
+	gh release create v$$VERSION bot_army_job_applications-$$VERSION.tar.gz \
 		--title "Release v$$VERSION" \
 		--notes "Job Applications Bot Elixir release v$$VERSION. Download and deploy with Jenkins." \
 		--draft=false; \
