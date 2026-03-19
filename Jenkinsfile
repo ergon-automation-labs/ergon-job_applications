@@ -14,7 +14,8 @@ pipeline {
 
   environment {
     BOT_NAME = 'job_applications'
-    STATE_NAME = 'job_applications'
+    RELEASE_NAME = 'bot_army_job_applications'
+    STATE_NAME = 'bot_army_job_applications'
     RELEASE_DIR = "/opt/ergon/releases/${BOT_NAME}"
     GITHUB_REPO = "ergon-automation-labs/ergon_job_applications"
     SALT_TARGET = '-G bot_army_node_type:air'
@@ -47,7 +48,7 @@ pipeline {
           echo "Latest release: $LATEST_RELEASE"
 
           # Download the tarball asset
-          echo "Downloading: job_applications_bot-*.tar.gz"
+          echo "Downloading: ${RELEASE_NAME}-*.tar.gz"
           mkdir -p ./release-artifact
 
           gh release download $LATEST_RELEASE \
@@ -127,7 +128,7 @@ pipeline {
           echo "==============================================="
 
           # Get the release binary path
-          RELEASE_BIN="${RELEASE_DIR}/current/job_applications_bot/bin/job_applications_bot"
+          RELEASE_BIN="${RELEASE_DIR}/current/${RELEASE_NAME}/bin/${RELEASE_NAME}"
 
           if [ ! -f "$RELEASE_BIN" ]; then
             echo "⚠️  Release binary not found at $RELEASE_BIN"
@@ -154,7 +155,7 @@ pipeline {
     success {
       sh '''
         # Extract version from the deployed release
-        START_ERL="${RELEASE_DIR}/current/job_applications_bot/releases/start_erl.data"
+        START_ERL="${RELEASE_DIR}/current/${RELEASE_NAME}/releases/start_erl.data"
         if [ -f "$START_ERL" ]; then
           VERSION=$(awk '{print $2}' "$START_ERL")
         else
