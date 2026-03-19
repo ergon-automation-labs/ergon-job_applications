@@ -110,8 +110,18 @@ defmodule BotArmyJobApplications.NATS.Publisher do
   then publish events.job.listings.new for each new one.
   """
   def publish_listing_ingest(payload) when is_map(payload) do
-    body = Jason.encode!(%{"event" => "job.listings.ingest", "payload" => payload})
-    do_publish("job.listings.ingest", body)
+    request = %{
+      "event" => "job.listings.ingest",
+      "event_id" => UUID.uuid4() |> to_string(),
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_job_applications",
+      "source_node" => get_node_name(),
+      "triggered_by" => "job_applications.bot",
+      "schema_version" => "1.0",
+      "payload" => payload
+    }
+
+    publish(request)
   end
 
   @doc """

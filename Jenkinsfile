@@ -91,6 +91,10 @@ pipeline {
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
           echo "Deploying service via Salt..."
+          echo "⚠️  NOTE: Salt state files must be synced from bot_army_infra before this runs."
+          echo "    Run: cd ../bot_army_infra && make sync-bots"
+          echo ""
+
           salt_apply() {
             local state=$1 attempt=0
             until sudo /opt/salt/salt ${SALT_TARGET} state.apply $state; do

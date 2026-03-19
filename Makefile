@@ -175,7 +175,7 @@ scan-listings:
 	@echo "Sending scan request to job_applications bot..."
 	nats request --server nats://localhost:4222 \
 		job.listings.fetch.request \
-		'{"event_id":"'$$(uuidgen | tr '[:upper:]' '[:lower:]')'","event":"job.listings.fetch.request","schema_version":"1.0","timestamp":"'$$(date -u +%Y-%m-%dT%H:%M:%SZ)'","source":"manual","triggered_by":"user","payload":{}}' \
+		'{"event_id":"'$$(uuidgen | tr '[:upper:]' '[:lower:]')'","event":"job.listings.fetch.request","schema_version":"1.0","timestamp":"'$$(date -u +%Y-%m-%dT%H:%M:%SZ)'","source":"manual","source_node":"manual","triggered_by":"user","payload":{}}' \
 		--timeout 30s || echo "Scan triggered (running asynchronously)"
 	@echo ""
 	@echo "✓ Job listing scan triggered"
