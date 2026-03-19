@@ -49,10 +49,10 @@ defmodule BotArmyJobApplications.Application do
     if @env == :test do
       children
     else
-      [
+      children ++ [
         {BotArmyJobApplications.ResumeStore, []},
         {BotArmyJobApplications.ListingStore, []},
-        {BotArmyJobApplications.ApplicationStore, []} | children
+        {BotArmyJobApplications.ApplicationStore, []}
       ]
     end
   end
