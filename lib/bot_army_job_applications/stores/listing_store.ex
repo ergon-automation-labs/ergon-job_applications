@@ -45,12 +45,14 @@ defmodule BotArmyJobApplications.ListingStore do
 
     state = try do
       listings = BotArmyJobApplications.Repo.all(BotArmyJobApplications.Schemas.Listing)
+      loaded_count = length(listings)
+      Logger.info("ListingStore loaded #{loaded_count} listings from database")
       Enum.reduce(listings, %{}, fn listing, acc ->
         Map.put(acc, listing.id |> to_string(), schema_to_map(listing))
       end)
     rescue
-      _ ->
-        Logger.warning("Could not load listings from database. Starting with empty state.")
+      e ->
+        Logger.warning("Could not load listings from database. Starting with empty state. Error: #{inspect(e)}")
         %{}
     end
 
