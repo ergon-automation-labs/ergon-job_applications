@@ -13,3 +13,18 @@ config :bot_army_job_applications, BotArmyJobApplications.Repo,
   password: System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_PASSWORD") || System.get_env("DATABASE_PASSWORD") || "postgres",
   pool_size: 10,
   ssl: false
+
+# Ingestion boards configuration at runtime
+# Source: INGESTION_BOARDS_JSON env var (set by Salt pillar via launchd)
+# Format: JSON array like [{"source":"greenhouse","board_token":"stripe","company_name":"Stripe"}]
+ingestion_boards =
+  case System.get_env("INGESTION_BOARDS_JSON") do
+    nil -> []
+    json_str ->
+      case Jason.decode(json_str) do
+        {:ok, boards} when is_list(boards) -> boards
+        _ -> []
+      end
+  end
+
+config :bot_army_job_applications, :ingestion_boards, ingestion_boards
