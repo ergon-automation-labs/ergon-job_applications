@@ -177,6 +177,7 @@ defmodule BotArmyJobApplications.NATS.Publisher do
       "job.application.signal.detected" -> "events.job.application.signal.detected"
       "job.application.signal.cleared" -> "events.job.application.signal.cleared"
       "job.application.digest.ready" -> "events.job.application.digest.ready"
+      "job.listings.ingest" -> "job.listings.ingest"
       "job.listings.new" -> "events.job.listings.new"
       "job.resume.created" -> "events.job.resume.created"
       "job.resume.parse.failed" -> "events.job.resume.parse.failed"
