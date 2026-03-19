@@ -224,11 +224,14 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   @impl true
   def handle_info({:msg, %{topic: "job.listings.list", reply_to: reply_to} = _msg}, state)
       when is_binary(reply_to) and reply_to != "" do
-    # Request/reply: return list of listings for LiveView
+    # Request/reply: return list of listings for LiveView (limited to avoid NATS payload limits)
     response =
       case listing_store().list([]) do
-        {:ok, listings} -> Jason.encode!(%{"ok" => true, "listings" => listings})
-        _ -> Jason.encode!(%{"ok" => false, "listings" => []})
+        {:ok, listings} ->
+          # Limit to 100 listings per response to avoid exceeding NATS max_payload (default 1MB)
+          limited = Enum.take(listings, 100)
+          Jason.encode!(%{"ok" => true, "listings" => limited, "total" => length(listings)})
+        _ -> Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0})
       end
 
     if state.conn do
