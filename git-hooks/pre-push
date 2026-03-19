@@ -2,8 +2,12 @@
 
 # Pre-push hook for bot_army_job_applications
 # Ensures code is tested, compiled, and released before pushing to main
+# Uses absolute paths since git hooks run in a restricted environment
 
 set -e
+
+# Use absolute paths since git hooks have limited environment
+MIX_BIN="/Users/abby/.local/share/mise/shims/mix"
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
@@ -19,7 +23,7 @@ echo "==============================================="
 # Step 1: Compile with strict warnings
 echo ""
 echo "1️⃣  Compiling with warnings as errors..."
-mix compile --warnings-as-errors || {
+$MIX_BIN compile --warnings-as-errors || {
   echo "❌ Compilation failed"
   exit 1
 }
@@ -28,7 +32,7 @@ echo "✓ Compilation successful"
 # Step 2: Run tests
 echo ""
 echo "2️⃣  Running tests..."
-mix test || {
+$MIX_BIN test || {
   echo "❌ Tests failed"
   exit 1
 }
@@ -37,7 +41,7 @@ echo "✓ All tests passed"
 # Step 3: Build release
 echo ""
 echo "3️⃣  Building release..."
-MIX_ENV=prod mix release || {
+MIX_ENV=prod $MIX_BIN release --overwrite || {
   echo "❌ Release build failed"
   exit 1
 }
