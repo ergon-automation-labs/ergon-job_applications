@@ -228,9 +228,11 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     response =
       case listing_store().list([]) do
         {:ok, listings} ->
-          # Limit to 100 listings per response to avoid exceeding NATS max_payload (default 1MB)
+          # Limit to 100 listings per response and strip jd_text to avoid exceeding NATS max_payload (default 1MB)
           limited = Enum.take(listings, 100)
-          Jason.encode!(%{"ok" => true, "listings" => limited, "total" => length(listings)})
+          # Remove jd_text from each listing to reduce payload size
+          stripped = Enum.map(limited, fn listing -> Map.delete(listing, "jd_text") end)
+          Jason.encode!(%{"ok" => true, "listings" => stripped, "total" => length(listings)})
         _ -> Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0})
       end
 
