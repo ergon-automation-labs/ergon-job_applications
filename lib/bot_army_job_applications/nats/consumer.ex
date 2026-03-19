@@ -244,6 +244,28 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
+  def handle_info({:msg, %{topic: "job.listing.get", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: return full listing details (including jd_text) by ID
+    response =
+      case Jason.decode(body) do
+        {:ok, %{"listing_id" => listing_id}} when is_binary(listing_id) ->
+          case listing_store().get(listing_id) do
+            {:ok, listing} -> Jason.encode!(%{"ok" => true, "listing" => listing})
+            {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "listing_not_found"})
+          end
+        _ ->
+          Jason.encode!(%{"ok" => false, "error" => "missing_listing_id"})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_info({:msg, %{topic: "job.application.list", reply_to: reply_to} = _msg}, state)
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return list of applications for LiveView
