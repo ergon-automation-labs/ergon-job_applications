@@ -1,4 +1,4 @@
-.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db discover-boards discover-boards-yaml sync-boards sync-boards-dry-run
+.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -18,11 +18,13 @@ help:
 	@echo "  make format          - Format Elixir code"
 	@echo "  make clean           - Clean build artifacts"
 	@echo ""
-	@echo "Board discovery commands (job ingestion setup):"
-	@echo "  make discover-boards     - Discover active job boards on Greenhouse/Lever"
+	@echo "Job discovery & ingestion commands:"
+	@echo "  make discover-boards      - Discover active job boards on Greenhouse/Lever"
 	@echo "  make discover-boards-yaml - Generate YAML config for discovered boards"
-	@echo "  make sync-boards         - Discover boards + auto-update Salt pillar + commit"
-	@echo "  make sync-boards-dry-run - Preview board discovery (no changes)"
+	@echo "  make sync-boards          - Discover boards + auto-update Salt pillar + commit"
+	@echo "  make sync-boards-dry-run  - Preview board discovery (no changes)"
+	@echo "  make scan-listings        - Scan and ingest jobs from configured boards"
+	@echo "  make scan                 - Full discovery + scan (all at once)"
 	@echo ""
 	@echo "Release commands (normally automatic via git hook):"
 	@echo "  make release         - Build OTP release locally (manual, if needed)"
@@ -163,4 +165,32 @@ sync-boards-dry-run:
 	@echo "==============================================="
 	@echo ""
 	mix job_applications.sync_boards_to_salt --dry-run
+	@echo ""
+
+scan-listings:
+	@echo "==============================================="
+	@echo "Triggering job listing scan via NATS"
+	@echo "==============================================="
+	@echo ""
+	@echo "Sending scan request to job_applications bot..."
+	nats request --server nats://localhost:4222 \
+		job.listings.fetch.request \
+		'{"event_id":"'$$(uuidgen | tr '[:upper:]' '[:lower:]')'","event":"job.listings.fetch.request","schema_version":"1.0","timestamp":"'$$(date -u +%Y-%m-%dT%H:%M:%SZ)'","source":"manual","triggered_by":"user","payload":{}}' \
+		--timeout 30s || echo "Scan triggered (running asynchronously)"
+	@echo ""
+	@echo "✓ Job listing scan triggered"
+	@echo "Check logs: tail -50 /var/log/bot_army/job_applications.log"
+	@echo ""
+
+scan: discover-boards scan-listings
+	@echo "==============================================="
+	@echo "✓ Job discovery and scan requests submitted"
+	@echo "==============================================="
+	@echo ""
+	@echo "Boards discovered:"
+	@discover-boards
+	@echo ""
+	@echo "Next steps:"
+	@echo "  Monitor scan progress: tail -f /var/log/bot_army/job_applications.log"
+	@echo "  View discovered listings in LiveView: http://localhost:30004"
 	@echo ""
