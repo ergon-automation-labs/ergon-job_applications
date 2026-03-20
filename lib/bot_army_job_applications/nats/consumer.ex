@@ -222,18 +222,34 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.listings.list", reply_to: reply_to} = _msg}, state)
+  def handle_info({:msg, %{topic: "job.listings.list", reply_to: reply_to, body: body} = _msg}, state)
       when is_binary(reply_to) and reply_to != "" do
-    # Request/reply: return list of listings for LiveView (limited to avoid NATS payload limits)
+    # Request/reply: return paginated list of listings (offset/limit support)
+    offset = case Jason.decode(body) do
+      {:ok, %{"offset" => off}} when is_integer(off) -> max(0, off)
+      _ -> 0
+    end
+
     response =
       case listing_store().list([]) do
         {:ok, listings} ->
-          # Limit to 100 listings per response and strip jd_text to avoid exceeding NATS max_payload (default 1MB)
-          limited = Enum.take(listings, 100)
+          # Sort by company name for consistent pagination experience
+          sorted = listings |> Enum.sort_by(&(&1["company"] || ""))
+          total = length(sorted)
+          limit = 100
+          # Apply offset and limit
+          paginated = sorted |> Enum.drop(offset) |> Enum.take(limit)
           # Remove jd_text from each listing to reduce payload size
-          stripped = Enum.map(limited, fn listing -> Map.delete(listing, "jd_text") end)
-          Jason.encode!(%{"ok" => true, "listings" => stripped, "total" => length(listings)})
-        _ -> Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0})
+          stripped = Enum.map(paginated, fn listing -> Map.delete(listing, "jd_text") end)
+          Jason.encode!(%{
+            "ok" => true,
+            "listings" => stripped,
+            "total" => total,
+            "offset" => offset,
+            "limit" => limit,
+            "returned" => length(stripped)
+          })
+        _ -> Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0, "offset" => 0})
       end
 
     if state.conn do
