@@ -51,6 +51,10 @@ defmodule BotArmyJobApplications.Handlers.IngestHandlerTest do
         {:ok, Map.put(attrs, "id", "new-id")}
       end)
 
+      # Mock ResumeStore.list() which is called by score_listing_async
+      BotArmyJobApplications.ResumeStoreMock
+      |> expect(:list, fn -> {:error, :no_resumes} end)
+
       # Publisher is not mocked; it will try to publish. We only assert the handler return value.
       assert {:ok, {:created, listing}} = IngestHandler.handle_ingest(payload)
       assert listing["id"] == "new-id"

@@ -99,6 +99,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "resume_parse" ->
         BotArmyJobApplications.Handlers.ResumeParseHandler.handle_parse_response(message)
 
+      "job_recommendation" ->
+        BotArmyJobApplications.Handlers.RecommendationHandler.handle_llm_score_response(message)
+
       _ ->
         Logger.debug("Unknown LLM response source_domain: #{source_domain}")
     end
@@ -140,6 +143,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.email.rejection",
             "job.listings.ingest",
             "job.listings.fetch.request",
+            "job.listings.recommend",
             "job.resume.upload",
             "job.resume.list",
             "job.resume.get",
@@ -276,6 +280,33 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
     if state.conn do
       Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.listings.recommend", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: recommendations request (tag-scored immediately, LLM enrichment async)
+    case Jason.decode(body) do
+      {:ok, payload} ->
+        message = BotArmyCore.NATS.Decoder.decode(Jason.encode!(payload))
+        case message do
+          {:ok, decoded} ->
+            BotArmyJobApplications.Handlers.RecommendationHandler.handle_recommend(
+              decoded,
+              reply_to,
+              state.conn
+            )
+          _ ->
+            response = Jason.encode!(%{"ok" => false, "error" => "decode_failed"})
+            Gnat.pub(state.conn, reply_to, response)
+        end
+
+      {:error, _} ->
+        response = Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+        if state.conn, do: Gnat.pub(state.conn, reply_to, response)
     end
 
     {:noreply, state}

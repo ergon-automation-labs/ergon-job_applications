@@ -23,6 +23,9 @@ defmodule BotArmyJobApplications.Schemas.Listing do
     field :discovered_at, :naive_datetime
     field :scored_at, :naive_datetime
     field :dedup_hash, :string
+    field :recommendation_score, :float
+    field :recommendation_reason, :string
+    field :gtd_pushed, :boolean, default: false
 
     timestamps()
   end
@@ -43,7 +46,10 @@ defmodule BotArmyJobApplications.Schemas.Listing do
       :status,
       :discovered_at,
       :scored_at,
-      :dedup_hash
+      :dedup_hash,
+      :recommendation_score,
+      :recommendation_reason,
+      :gtd_pushed
     ])
     |> validate_required([:company, :role_title])
   end

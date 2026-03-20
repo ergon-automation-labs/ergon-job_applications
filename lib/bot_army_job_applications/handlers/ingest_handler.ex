@@ -38,6 +38,8 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
           case store.create(attrs) do
             {:ok, listing} ->
               publish_listing_new(listing)
+              # Fire async LLM recommendation scoring
+              BotArmyJobApplications.Handlers.RecommendationHandler.score_listing_async(listing)
               {:ok, {:created, listing}}
 
             {:error, reason} ->

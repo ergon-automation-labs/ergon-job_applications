@@ -179,6 +179,7 @@ defmodule BotArmyJobApplications.NATS.Publisher do
       "job.application.digest.ready" -> "events.job.application.digest.ready"
       "job.listings.ingest" -> "job.listings.ingest"
       "job.listings.new" -> "events.job.listings.new"
+      "job.listing.recommendation_scored" -> "events.job.listing.recommendation_scored"
       "job.resume.created" -> "events.job.resume.created"
       "job.resume.parse.failed" -> "events.job.resume.parse.failed"
       "job.error" -> "events.job.error"

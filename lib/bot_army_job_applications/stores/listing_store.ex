@@ -121,7 +121,10 @@ defmodule BotArmyJobApplications.ListingStore do
               "status" => Map.get(payload, "status", db_listing.status),
               "discovered_at" => Map.get(payload, "discovered_at", db_listing.discovered_at),
               "scored_at" => Map.get(payload, "scored_at", db_listing.scored_at),
-              "dedup_hash" => Map.get(payload, "dedup_hash", db_listing.dedup_hash)
+              "dedup_hash" => Map.get(payload, "dedup_hash", db_listing.dedup_hash),
+              "recommendation_score" => Map.get(payload, "recommendation_score", db_listing.recommendation_score),
+              "recommendation_reason" => Map.get(payload, "recommendation_reason", db_listing.recommendation_reason),
+              "gtd_pushed" => Map.get(payload, "gtd_pushed", db_listing.gtd_pushed)
             }
           )
 
@@ -196,6 +199,9 @@ defmodule BotArmyJobApplications.ListingStore do
       "discovered_at" => if(listing.discovered_at, do: listing.discovered_at |> NaiveDateTime.to_iso8601(), else: nil),
       "scored_at" => if(listing.scored_at, do: listing.scored_at |> NaiveDateTime.to_iso8601(), else: nil),
       "dedup_hash" => listing.dedup_hash,
+      "recommendation_score" => listing.recommendation_score,
+      "recommendation_reason" => listing.recommendation_reason,
+      "gtd_pushed" => listing.gtd_pushed,
       "created_at" => listing.inserted_at |> NaiveDateTime.to_iso8601(),
       "updated_at" => listing.updated_at |> NaiveDateTime.to_iso8601()
     }
