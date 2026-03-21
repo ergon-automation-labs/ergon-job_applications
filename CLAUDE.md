@@ -56,10 +56,16 @@ bot_army_job_applications/
 │           └── application_server.ex
 │
 ├── priv/repo/migrations/
-│   ├── 20260311000001_create_resumes.exs
-│   ├── 20260311000002_create_roles.exs
-│   ├── 20260311000003_create_listings.exs
-│   └── 20260311000004_create_applications.exs
+│   ├── README.md                          # Migration structure guide
+│   ├── portable/                          # Portable (public) migrations synced to mirrors
+│   │   ├── 20260311000001_create_resumes.exs
+│   │   ├── 20260311000002_create_resume_roles.exs
+│   │   ├── ... (all schema-only migrations)
+│   │   └── 20260320000008_add_recommendation_fields_to_listings.exs
+│   ├── 20260311000001_create_resumes.exs  # Also in migrations/ (personal version)
+│   ├── 20260311000002_create_resume_roles.exs
+│   ├── ... (all 8 existing migrations)
+│   └── 20260320000008_add_recommendation_fields_to_listings.exs
 │
 ├── test/
 │   ├── test_helper.exs
@@ -77,6 +83,39 @@ bot_army_job_applications/
 ├── CLAUDE.md
 └── README.md
 ```
+
+---
+
+## Portable Distribution — Migration Strategy
+
+This repo is synced to a public mirror (`portable_job_applications`) for self-hosted users. Migrations are split to enable clean sync:
+
+### Migration Discipline
+
+**Schema-only migrations** (new tables, generic columns):
+- Add to `priv/repo/migrations/`
+- Copy to `priv/repo/migrations/portable/`
+- Gets synced to public mirror
+
+**Personal-data migrations** (seed data, personal fixtures):
+- Add to `priv/repo/migrations/` only
+- Never copied to `portable/`
+- Jenkins sync filters these out
+
+**Example:**
+- Adding a new column to `resumes`: add to both `migrations/` and `migrations/portable/`
+- Seeding test resumes for personal pipeline: `migrations/` only
+
+### Jenkins Sync Process (Future)
+
+On commit to `main`:
+1. Clone private repo
+2. Strip `priv/repo/migrations/` (keep portable only)
+3. Run tests
+4. Push to `portable_job_applications` mirror
+5. Build Docker image and push to ghcr.io
+
+Portable users run migrations from `migrations/portable/` automatically in Release.migrate() task.
 
 ---
 
@@ -235,6 +274,131 @@ identified → drafting → ready_to_submit → submitted → phone_screen → t
 - `job.listing.score.result` — fit score computed
 - `job.application.signal.detected` — unconfirmed email signal
 - `job.digest.ready` — daily digest ready
+
+### TUI Management (Request/Reply)
+**Subscribes (Request/Reply):**
+- `job.resume.list` — list all resumes (request/reply)
+- `job.resume.get` — get single resume by ID (request/reply)
+- `job.resume.create` — create new resume from TUI (request/reply)
+- `job.resume.update` — update existing resume from TUI (request/reply)
+- `job.resume.delete` — delete resume (request/reply)
+
+**Request Payloads:**
+
+#### job.resume.list (empty request)
+```json
+{}
+```
+**Response:**
+```json
+{
+  "ok": true,
+  "resumes": [
+    {
+      "id": "uuid",
+      "identity": {"name": "...", "summary": "..."},
+      "created_at": "ISO8601"
+    }
+  ]
+}
+```
+
+#### job.resume.get
+```json
+{"resume_id": "uuid"}
+```
+**Response:**
+```json
+{
+  "ok": true,
+  "resume": {
+    "id": "uuid",
+    "identity": {"name": "...", "summary": "..."},
+    "roles": [
+      {
+        "id": "uuid",
+        "title": "...",
+        "company": "...",
+        "start_date": "YYYY-MM",
+        "end_date": "YYYY-MM",
+        "bullets": [{"text": "..."}]
+      }
+    ],
+    "skills": [
+      {
+        "id": "uuid",
+        "name": "...",
+        "proficiency": "expert|advanced|intermediate|beginner",
+        "years": 3
+      }
+    ]
+  }
+}
+```
+
+#### job.resume.create
+```json
+{
+  "identity": {"name": "...", "summary": "..."},
+  "roles": [
+    {
+      "title": "...",
+      "company": "...",
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "bullets": ["text1", "text2"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "...",
+      "proficiency": "expert|advanced|intermediate|beginner",
+      "years": 3
+    }
+  ]
+}
+```
+**Response:**
+```json
+{"ok": true, "resume_id": "uuid"}
+```
+
+#### job.resume.update
+```json
+{
+  "resume_id": "uuid",
+  "identity": {"name": "...", "summary": "..."},
+  "roles": [
+    {
+      "title": "...",
+      "company": "...",
+      "start_date": "YYYY-MM",
+      "end_date": "YYYY-MM",
+      "bullets": ["text1", "text2"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "...",
+      "proficiency": "expert|advanced|intermediate|beginner",
+      "years": 3
+    }
+  ]
+}
+```
+**Response:**
+```json
+{"ok": true}
+```
+
+#### job.resume.delete
+```json
+{"resume_id": "uuid"}
+```
+**Response:**
+```json
+{"ok": true}
+```
 
 ---
 
