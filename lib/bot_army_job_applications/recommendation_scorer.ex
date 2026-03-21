@@ -148,14 +148,14 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   defp extract_resume_tags(resume) do
     # Skill names + all skill tags
-    skill_tags = resume["skills"]
+    skill_tags = (resume["skills"] || [])
       |> Enum.flat_map(fn skill ->
         [String.downcase(skill["name"])] ++ (skill["tags"] || [])
       end)
       |> Enum.map(&String.downcase/1)
 
     # Bullet tags from all roles
-    bullet_tags = resume["roles"]
+    bullet_tags = (resume["roles"] || [])
       |> Enum.flat_map(fn role ->
         role["bullets"] || []
       end)

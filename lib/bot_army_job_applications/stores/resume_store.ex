@@ -290,7 +290,12 @@ defmodule BotArmyJobApplications.ResumeStore do
 
   @impl true
   def handle_call(:list, _from, state) do
-    resumes = state |> Map.values()
+    # Hydrate all resumes (add roles and skills) for consistent data structure
+    resumes = state
+      |> Map.to_list()
+      |> Enum.map(fn {resume_id, resume} ->
+        hydrate_resume(resume_id, resume)
+      end)
     {:reply, {:ok, resumes}, state}
   end
 
