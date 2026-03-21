@@ -70,7 +70,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
                 Logger.info("Sent recommendations: #{length(recommendations)} scored (tag overlap), LLM enrichment in background")
 
                 # Asynchronously: fire LLM requests for each shortlist item
-                fire_async_llm_requests(scored_pairs, resume["id"], resume_id)
+                fire_async_llm_requests(scored_pairs, resume)
 
               {:error, reason} ->
                 Logger.error("Failed to fetch listings: #{inspect(reason)}")
@@ -198,10 +198,11 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     end
   end
 
-  defp fire_async_llm_requests(scored_pairs, resume_id, original_resume_id) do
+  defp fire_async_llm_requests(scored_pairs, resume) do
     Enum.each(scored_pairs, fn {listing, _score} ->
       listing_id = listing["id"]
-      prompt = RecommendationScorer.build_llm_prompt(listing, %{"id" => resume_id})
+      resume_id = resume["id"]
+      prompt = RecommendationScorer.build_llm_prompt(listing, resume)
 
       Publisher.publish_llm_request_with_metadata(
         %{"text" => prompt},
@@ -209,7 +210,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
         nil,
         %{
           "listing_id" => listing_id,
-          "resume_id" => original_resume_id
+          "resume_id" => resume_id
         }
       )
     end)
