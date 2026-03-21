@@ -155,7 +155,10 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
         Logger.info("Firing async LLM recommendation request for listing #{listing_id}")
 
         Publisher.publish_llm_request_with_metadata(
-          %{"text" => prompt},
+          %{
+            "text" => prompt,
+            "prompt_id" => "job_recommendation_#{listing_id}"
+          },
           "job_recommendation",
           nil,
           %{
@@ -211,7 +214,10 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
         Logger.info("Publishing LLM request for listing #{listing_id} with resume #{resume_id}")
 
         result = Publisher.publish_llm_request_with_metadata(
-          %{"text" => prompt},
+          %{
+            "text" => prompt,
+            "prompt_id" => "job_recommendation_#{listing_id}"
+          },
           "job_recommendation",
           nil,
           %{
