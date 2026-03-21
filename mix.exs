@@ -34,7 +34,6 @@ defmodule BotArmyJobApplications.MixProject do
       {:logger_json, "~> 5.1"},
       {:elixir_uuid, "~> 1.2"},
       {:req, "~> 0.4"},
-      {:httpoison, "~> 2.0"},
 
       # Development/Test
       {:ex_doc, "~> 0.30", only: :dev},
