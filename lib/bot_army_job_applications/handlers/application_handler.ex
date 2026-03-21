@@ -159,9 +159,11 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
             # Publish state updated event
             publish_state_updated(application, event_id)
 
-            # Handle GTD integration (only for valid applications)
-            if to_state in @gtd_trigger_states and is_valid_for_gtd?(application) do
-              create_gtd_task(application, to_state)
+            # Handle GTD integration (only for valid applications, if enabled)
+            if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
+              if to_state in @gtd_trigger_states and is_valid_for_gtd?(application) do
+                create_gtd_task(application, to_state)
+              end
             end
 
           {:error, :invalid_transition} ->

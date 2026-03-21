@@ -33,6 +33,10 @@ config :logger,
 config :bot_army_job_applications, :ingestion_boards, []
 config :bot_army_job_applications, :ingestion_interval_ms, 6 * 60 * 60 * 1000
 
+# GTD Bot integration (personal bot army feature)
+# Set to false for portable/standalone distribution
+config :bot_army_job_applications, :enable_gtd_integration, true
+
 # Import environment-specific config
 if File.exists?("config/#{Mix.env()}.exs") do
   import_config "#{Mix.env()}.exs"

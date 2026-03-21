@@ -115,11 +115,13 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
           {:ok, listing} ->
             Logger.info("Updated listing #{listing_id} with recommendation score: #{(score * 100) |> trunc()}%")
 
-            # If score >= 0.80 and not yet pushed to GTD, push it
-            if score >= 0.80 and not (listing["gtd_pushed"] || false) do
-              publish_gtd_inbox_item(listing, score, reason, resume_id)
-              # Mark as pushed
-              listing_store().update(listing_id, %{"gtd_pushed" => true})
+            # If score >= 0.80 and not yet pushed to GTD, push it (if GTD integration enabled)
+            if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
+              if score >= 0.80 and not (listing["gtd_pushed"] || false) do
+                publish_gtd_inbox_item(listing, score, reason, resume_id)
+                # Mark as pushed
+                listing_store().update(listing_id, %{"gtd_pushed" => true})
+              end
             end
 
             # Publish event

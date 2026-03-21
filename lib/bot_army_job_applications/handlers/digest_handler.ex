@@ -86,8 +86,10 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
       BotArmyJobApplications.NATS.Publisher.publish(event)
     end
 
-    # Publish GTD inbox task
-    publish_gtd_digest(digest)
+    # Publish GTD inbox task (if GTD integration enabled)
+    if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
+      publish_gtd_digest(digest)
+    end
   end
 
   # Private helpers
