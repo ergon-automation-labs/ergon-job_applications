@@ -47,18 +47,40 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   @doc """
   Pre-filter listings by tag overlap, return top N sorted by score descending.
+
+  Optimized for large listing sets: uses a heap-like approach to track only
+  the top N items instead of sorting all N items.
   """
   def shortlist(listings, resume, limit) when is_list(listings) and is_map(resume) and is_integer(limit) do
     listings
-    |> Enum.map(fn listing ->
+    |> Enum.reduce([], fn listing, top_n ->
       score = tag_overlap_score(listing, resume)
-      {listing, score}
+      insert_into_top_n({listing, score}, top_n, limit)
     end)
     |> Enum.sort_by(fn {_, score} -> score end, :desc)
-    |> Enum.take(limit)
   end
 
   def shortlist(_, _, _), do: []
+
+  # Helper: maintain a list of top N items as we iterate through all items
+  # Keeps list sorted ascending, easiest to drop minimum from front
+  defp insert_into_top_n(item = {_, score}, top_n, limit) do
+    cond do
+      length(top_n) < limit ->
+        # Not at limit yet, insert in sorted position
+        top_n ++ [item]
+        |> Enum.sort_by(fn {_, s} -> s end, :asc)
+
+      score > elem(Enum.at(top_n, 0), 1) ->
+        # Score beats the minimum in top_n, replace minimum
+        tl(top_n) ++ [item]
+        |> Enum.sort_by(fn {_, s} -> s end, :asc)
+
+      true ->
+        # Score is lower than minimum, skip
+        top_n
+    end
+  end
 
   @doc """
   Build LLM prompt for semantic scoring.
