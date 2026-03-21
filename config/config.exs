@@ -37,20 +37,6 @@ config :bot_army_job_applications, :ingestion_interval_ms, 6 * 60 * 60 * 1000
 # Set to false for portable/standalone distribution
 config :bot_army_job_applications, :enable_gtd_integration, true
 
-# LLM Router (unified for personal and portable)
-# Personal: backend :nats (with Ollama dev fallback)
-# Portable: backend :ollama (with Anthropic fallback)
-# Auto-detects based on NATS connection availability
-config :bot_army_job_applications, :llm_router,
-  backend: :auto,  # Auto-detect: :nats (if available) or :ollama
-  nats_url: System.get_env("NATS_URL", "nats://localhost:4222"),
-  ollama_url: System.get_env("OLLAMA_URL", "http://localhost:11434"),
-  ollama_model: System.get_env("OLLAMA_MODEL", "mistral"),
-  anthropic_api_key: System.get_env("ANTHROPIC_API_KEY"),
-  nats_timeout_ms: 30_000,
-  ollama_timeout_ms: 10_000,
-  anthropic_timeout_ms: 30_000
-
 # Import environment-specific config
 if File.exists?("config/#{Mix.env()}.exs") do
   import_config "#{Mix.env()}.exs"
