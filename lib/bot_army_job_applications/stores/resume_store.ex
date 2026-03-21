@@ -29,6 +29,14 @@ defmodule BotArmyJobApplications.ResumeStore do
     GenServer.call(@server, {:update, resume_id, payload})
   end
 
+  def replace_full(resume_id, parsed_data) when is_binary(resume_id) and is_map(parsed_data) do
+    GenServer.call(@server, {:replace_full, resume_id, parsed_data})
+  end
+
+  def delete(resume_id) when is_binary(resume_id) do
+    GenServer.call(@server, {:delete, resume_id})
+  end
+
   def get(resume_id) when is_binary(resume_id) do
     GenServer.call(@server, {:get, resume_id})
   end
@@ -153,6 +161,117 @@ defmodule BotArmyJobApplications.ResumeStore do
           end
         else
           {:reply, {:error, :not_found}, state}
+        end
+    end
+  end
+
+  @impl true
+  def handle_call({:replace_full, resume_id, parsed_data}, _from, state) do
+    case Map.get(state, resume_id) do
+      nil ->
+        {:reply, {:error, :not_found}, state}
+
+      _resume ->
+        resume_uuid = Ecto.UUID.cast!(resume_id)
+        db_resume = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Resume, resume_uuid)
+
+        if db_resume do
+          # Update resume identity field
+          identity = Map.get(parsed_data, "identity", %{})
+
+          changeset = BotArmyJobApplications.Schemas.Resume.changeset(
+            db_resume,
+            %{
+              "identity" => identity,
+              "metadata" => Map.get(parsed_data, "metadata", %{})
+            }
+          )
+
+          case BotArmyJobApplications.Repo.update(changeset) do
+            {:ok, updated_db_resume} ->
+              # Delete all existing roles and bullets for this resume
+              BotArmyJobApplications.Repo.delete_all(
+                from r in BotArmyJobApplications.Schemas.ResumeRole,
+                  where: r.resume_id == ^resume_id
+              )
+
+              # Delete all existing skills for this resume
+              BotArmyJobApplications.Repo.delete_all(
+                from s in BotArmyJobApplications.Schemas.Skill,
+                  where: s.resume_id == ^resume_id
+              )
+
+              # Create new roles and bullets
+              :ok = create_roles_and_bullets(resume_id, parsed_data)
+
+              # Create new skills
+              :ok = create_skills(resume_id, parsed_data)
+
+              # Update cache with new data
+              updated_resume = schema_to_map(updated_db_resume)
+              new_state = Map.put(state, resume_id, updated_resume)
+              Logger.info("Replaced full resume in database: #{resume_id}")
+              {:reply, {:ok, updated_resume}, new_state}
+
+            {:error, changeset} ->
+              Logger.error("Failed to replace resume: #{inspect(changeset.errors)}")
+              {:reply, {:error, :database_error}, state}
+          end
+        else
+          {:reply, {:error, :not_found}, state}
+        end
+    end
+  end
+
+  @impl true
+  def handle_call({:delete, resume_id}, _from, state) do
+    case Map.get(state, resume_id) do
+      nil ->
+        {:reply, {:error, :not_found}, state}
+
+      _resume ->
+        resume_uuid = Ecto.UUID.cast!(resume_id)
+
+        # Get all role IDs for this resume first
+        role_ids =
+          BotArmyJobApplications.Repo.all(
+            from r in BotArmyJobApplications.Schemas.ResumeRole,
+              where: r.resume_id == ^resume_id,
+              select: r.id
+          )
+
+        # Delete all bullets for those roles
+        if Enum.any?(role_ids) do
+          BotArmyJobApplications.Repo.delete_all(
+            from b in BotArmyJobApplications.Schemas.ResumeBullet,
+              where: b.role_id in ^role_ids
+          )
+        end
+
+        # Delete all roles for this resume
+        BotArmyJobApplications.Repo.delete_all(
+          from r in BotArmyJobApplications.Schemas.ResumeRole,
+            where: r.resume_id == ^resume_id
+        )
+
+        # Delete all skills for this resume
+        BotArmyJobApplications.Repo.delete_all(
+          from s in BotArmyJobApplications.Schemas.Skill,
+            where: s.resume_id == ^resume_id
+        )
+
+        # Delete the resume itself
+        case BotArmyJobApplications.Repo.delete_all(
+          from r in BotArmyJobApplications.Schemas.Resume,
+            where: r.id == ^resume_uuid
+        ) do
+          {_count, _} ->
+            new_state = Map.delete(state, resume_id)
+            Logger.info("Deleted resume and all related data: #{resume_id}")
+            {:reply, :ok, new_state}
+
+          _ ->
+            {:reply, {:error, :delete_failed}, state}
         end
     end
   end

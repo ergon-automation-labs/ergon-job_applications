@@ -10,11 +10,15 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   - job.resume.upload — resume file upload
   - job.resume.list — list all resumes (request/reply)
   - job.resume.get — get single resume (request/reply)
+  - job.resume.create — create resume from TUI (request/reply)
+  - job.resume.update — update resume from TUI (request/reply)
+  - job.resume.delete — delete resume (request/reply)
   - events.llm.completion — LLM responses (routed by source_metadata.source_domain)
   - job.pipeline.query — request/reply queries
 
   Phase 1 (manual pipeline): Minimal subscriptions for artifact generation.
   Phase 2 (email + discovery): Full email watcher and scraper integration.
+  TUI Management: Resume CRUD via request/reply for surface.
   """
 
   use GenServer
@@ -147,6 +151,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.resume.upload",
             "job.resume.list",
             "job.resume.get",
+            "job.resume.create",
+            "job.resume.update",
+            "job.resume.delete",
             "events.llm.completion",
             "job.pipeline.query",
             "job.application.get",
@@ -289,20 +296,15 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   def handle_info({:msg, %{topic: "job.listings.recommend", reply_to: reply_to, body: body} = _msg}, state)
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: recommendations request (tag-scored immediately, LLM enrichment async)
+    # TUI sends empty payload, so just call the handler directly
     case Jason.decode(body) do
-      {:ok, payload} ->
-        message = BotArmyCore.NATS.Decoder.decode(Jason.encode!(payload))
-        case message do
-          {:ok, decoded} ->
-            BotArmyJobApplications.Handlers.RecommendationHandler.handle_recommend(
-              decoded,
-              reply_to,
-              state.conn
-            )
-          _ ->
-            response = Jason.encode!(%{"ok" => false, "error" => "decode_failed"})
-            Gnat.pub(state.conn, reply_to, response)
-        end
+      {:ok, _payload} ->
+        # Call handler with empty payload - no decoding needed
+        BotArmyJobApplications.Handlers.RecommendationHandler.handle_recommend(
+          %{},
+          reply_to,
+          state.conn
+        )
 
       {:error, _} ->
         response = Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
@@ -418,6 +420,66 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           end
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "missing resume_id"})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.resume.create", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: create resume from TUI structured payload
+    response =
+      case Jason.decode(body) do
+        {:ok, payload} when is_map(payload) ->
+          result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_create(payload)
+          Jason.encode!(result)
+        _ ->
+          Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.resume.update", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: update resume from TUI structured payload
+    response =
+      case Jason.decode(body) do
+        {:ok, payload} when is_map(payload) ->
+          result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_update(payload)
+          Jason.encode!(result)
+        _ ->
+          Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:msg, %{topic: "job.resume.delete", reply_to: reply_to, body: body} = _msg}, state)
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: delete resume
+    response =
+      case Jason.decode(body) do
+        {:ok, payload} when is_map(payload) ->
+          result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_delete(payload)
+          Jason.encode!(result)
+        _ ->
+          Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
       end
 
     if state.conn do
