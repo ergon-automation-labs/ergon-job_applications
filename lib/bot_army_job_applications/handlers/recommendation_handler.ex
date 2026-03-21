@@ -199,21 +199,35 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   end
 
   defp fire_async_llm_requests(scored_pairs, resume) do
+    Logger.info("fire_async_llm_requests: starting, #{length(scored_pairs)} listings to score")
+
     Enum.each(scored_pairs, fn {listing, _score} ->
       listing_id = listing["id"]
       resume_id = resume["id"]
-      prompt = RecommendationScorer.build_llm_prompt(listing, resume)
 
-      Publisher.publish_llm_request_with_metadata(
-        %{"text" => prompt},
-        "job_recommendation",
-        nil,
-        %{
-          "listing_id" => listing_id,
-          "resume_id" => resume_id
-        }
-      )
+      try do
+        prompt = RecommendationScorer.build_llm_prompt(listing, resume)
+
+        Logger.info("Publishing LLM request for listing #{listing_id} with resume #{resume_id}")
+
+        result = Publisher.publish_llm_request_with_metadata(
+          %{"text" => prompt},
+          "job_recommendation",
+          nil,
+          %{
+            "listing_id" => listing_id,
+            "resume_id" => resume_id
+          }
+        )
+
+        Logger.info("Published LLM request result: #{inspect(result)}")
+      rescue
+        e ->
+          Logger.error("Error publishing LLM request for listing #{listing_id}: #{inspect(e)}")
+      end
     end)
+
+    Logger.info("fire_async_llm_requests: completed")
   end
 
   defp reply_error(conn, reply_to, message) do
