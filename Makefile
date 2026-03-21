@@ -1,9 +1,17 @@
-.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings
+.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs logs-all
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
 	@echo ""
-	@echo "Setup commands:"
+	@echo "Portable Distribution (works anywhere with Docker):"
+	@echo "  make build           - Docker build (default, recommended)"
+	@echo "  make build-native    - Local Elixir/Mix build (requires Elixir 1.14+)"
+	@echo "  make test-docker     - Run tests in Docker"
+	@echo "  make start           - Start all services (docker compose up -d)"
+	@echo "  make stop            - Stop all services"
+	@echo "  make logs            - Watch service logs"
+	@echo ""
+	@echo "Setup commands (personal development):"
 	@echo "  make setup           - Set up project (deps.get + git hooks + database)"
 	@echo "  make setup-hooks     - Install git hooks for pre-push validation"
 	@echo "  make setup-db        - Create and migrate test database (required for testing)"
@@ -11,6 +19,7 @@ help:
 	@echo ""
 	@echo "Development commands:"
 	@echo "  make test            - Run all tests"
+	@echo "  make test-native     - Run tests locally (requires Elixir + PostgreSQL)"
 	@echo "  make credo           - Run linter"
 	@echo "  make dialyzer        - Run static analysis"
 	@echo "  make coverage        - Run tests with coverage"
@@ -87,6 +96,57 @@ format:
 clean:
 	mix clean
 	rm -rf _build cover
+
+# ============================================================================
+# Portable Distribution Targets (Docker-based, work everywhere)
+# ============================================================================
+
+# Default: Docker build (works everywhere, no local Elixir required)
+build: build-docker
+
+build-docker:
+	@echo "Building Job Applications bot with Docker..."
+	docker compose build job_applications
+
+# Bare-metal: local Elixir toolchain (requires Elixir 1.14+)
+build-native: deps
+	@echo "Building with local Elixir (Mix)..."
+	mix compile
+
+# Run tests (default: Docker)
+test: test-docker
+
+test-docker:
+	@echo "Running tests with Docker..."
+	docker compose run --rm job_applications mix test
+
+# Bare-metal tests (requires Elixir, PostgreSQL running locally)
+test-native: setup-db
+	@echo "Running tests locally..."
+	mix test
+
+# Docker Compose stack (all services: NATS, Postgres, bot, etc.)
+start:
+	@echo "Starting Job Applications stack..."
+	docker compose up -d
+	@echo "Services starting. View logs with: make logs"
+
+stop:
+	@echo "Stopping Job Applications stack..."
+	docker compose down
+
+restart:
+	docker compose restart
+
+logs:
+	docker compose logs -f job_applications
+
+logs-all:
+	docker compose logs -f
+
+# ============================================================================
+# Release & Deployment (personal/internal only)
+# ============================================================================
 
 release: check
 	@echo "==============================================="
