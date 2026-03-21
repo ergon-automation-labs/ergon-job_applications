@@ -173,6 +173,7 @@ defmodule BotArmyJobApplications.NATS.Publisher do
       "job.application.created" -> "events.job.application.created"
       "job.application.state.updated" -> "events.job.application.state.updated"
       "job.application.artifact.result" -> "events.job.application.artifact.result"
+      "job.application.interview_prep.result" -> "events.job.application.interview_prep.result"
       "job.application.ranked" -> "events.job.application.ranked"
       "job.application.signal.detected" -> "events.job.application.signal.detected"
       "job.application.signal.cleared" -> "events.job.application.signal.cleared"

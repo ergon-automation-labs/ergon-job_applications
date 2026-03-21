@@ -56,6 +56,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.application.artifact.request" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
 
+      "job.application.interview_prep.request" ->
+        BotArmyJobApplications.Handlers.InterviewPrepHandler.handle_request(message)
+
       "job.digest.request" ->
         BotArmyJobApplications.Handlers.DigestHandler.handle_request(message)
 
@@ -106,6 +109,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job_recommendation" ->
         BotArmyJobApplications.Handlers.RecommendationHandler.handle_llm_score_response(message)
 
+      "interview_prep" ->
+        BotArmyJobApplications.Handlers.InterviewPrepHandler.handle_llm_response(message)
+
       _ ->
         Logger.debug("Unknown LLM response source_domain: #{source_domain}")
     end
@@ -140,6 +146,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.application.command.confirm_signal",
             "job.application.command.dismiss_signal",
             "job.application.artifact.request",
+            "job.application.interview_prep.request",
             "job.digest.request",
             "job.email.interview_request",
             "job.email.phone_screen",
