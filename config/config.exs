@@ -21,7 +21,7 @@ config :bot_army_job_applications, ecto_repos: [BotArmyJobApplications.Repo]
 # (not at compile time, which is what config.exs does)
 
 config :logger,
-  level: :info
+  level: :debug
 
 # Job listing ingestion (Phase 2): Greenhouse and Lever boards to fetch.
 # Example:
