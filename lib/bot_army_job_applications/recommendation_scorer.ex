@@ -101,9 +101,11 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     experience_summary = build_experience_summary(resume)
     skills_summary = build_skills_summary(resume)
     listing_summary = build_listing_summary(listing)
+    location_preferences = build_location_preferences(resume)
 
     """
     #{resume_summary}
+    #{location_preferences}
 
     PROFESSIONAL EXPERIENCE:
     #{experience_summary}
@@ -119,7 +121,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     - Specific accomplishments that align with role responsibilities
     - Seniority/experience level alignment
     - Salary range compatibility
-    - Location fit (based on job location and candidate preferences if apparent)
+    - Location fit (based on job location and candidate preferences)
     - Growth/learning opportunity potential
 
     Respond with JSON:
@@ -261,6 +263,17 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     Name: #{name}
     Summary: #{summary}
     """
+  end
+
+  defp build_location_preferences(resume) do
+    identity = resume["identity"] || %{}
+    location_prefs = identity["location_preferences"]
+
+    if location_prefs && is_binary(location_prefs) && location_prefs != "" do
+      "Location Preferences: #{location_prefs}"
+    else
+      ""
+    end
   end
 
   defp build_experience_summary(resume) do

@@ -19,7 +19,11 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
 
   Payload:
     {
-      "identity": { "name": "...", "summary": "..." },
+      "identity": {
+        "name": "...",
+        "summary": "...",
+        "location_preferences": "San Francisco, Austin, Remote OK" (optional)
+      },
       "roles": [
         { "title": "...", "company": "...", "start_date": "YYYY-MM", "end_date": "YYYY-MM", "bullets": ["text1", "text2"] }
       ],
