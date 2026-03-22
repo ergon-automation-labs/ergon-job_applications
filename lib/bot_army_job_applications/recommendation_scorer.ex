@@ -86,30 +86,35 @@ defmodule BotArmyJobApplications.RecommendationScorer do
   Build LLM prompt for semantic scoring.
 
   Includes:
-  - Resume summary (from identity)
-  - Top 5 skills with proficiency
-  - Listing role/company/jd_tags
+  - Resume summary (identity + work history with key accomplishments)
+  - Top 5 skills with proficiency and years
+  - Full job description text from listing
   - Request JSON response: {score: 0-100, reason: string}
   """
   def build_llm_prompt(listing, resume) when is_map(listing) and is_map(resume) do
     resume_summary = build_resume_summary(resume)
+    experience_summary = build_experience_summary(resume)
     skills_summary = build_skills_summary(resume)
     listing_summary = build_listing_summary(listing)
 
     """
     #{resume_summary}
 
+    PROFESSIONAL EXPERIENCE:
+    #{experience_summary}
+
     TOP SKILLS:
     #{skills_summary}
 
-    OPPORTUNITY:
+    JOB OPPORTUNITY:
     #{listing_summary}
 
     Assess this match on a scale of 0-100. Consider:
-    - Relevance of skills to role requirements
-    - Experience level alignment
-    - Salary expectations vs. role level
-    - Growth/learning potential
+    - Relevance of skills and experience to explicit job requirements
+    - Specific accomplishments that align with role responsibilities
+    - Seniority/experience level alignment
+    - Salary range compatibility
+    - Growth/learning opportunity potential
 
     Respond with JSON:
     {
@@ -205,10 +210,48 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     summary = identity["summary"] || "Professional with experience"
 
     """
-    RESUME SUMMARY:
-    #{name}
-    #{summary}
+    CANDIDATE PROFILE:
+    Name: #{name}
+    Summary: #{summary}
     """
+  end
+
+  defp build_experience_summary(resume) do
+    roles = resume["roles"] || []
+
+    if Enum.empty?(roles) do
+      "No formal roles listed"
+    else
+      roles
+      |> Enum.map(fn role ->
+        title = role["title"] || "Role"
+        company = role["company"] || "Company"
+        start_date = role["start_date"] || "TBD"
+        end_date = role["end_date"] || "Current"
+
+        # Include top 2 bullets as accomplishment highlights
+        bullets = role["bullets"] || []
+        bullet_text = bullets
+          |> Enum.take(2)
+          |> Enum.map(fn bullet ->
+            text = if is_map(bullet), do: bullet["text"] || "", else: bullet
+            "  • #{text}"
+          end)
+          |> Enum.join("\n")
+
+        role_summary = "#{title} at #{company} (#{start_date} - #{end_date})"
+
+        if bullet_text != "" do
+          """
+          #{role_summary}
+          #{bullet_text}
+          """
+        else
+          role_summary
+        end
+      end)
+      |> Enum.join("\n")
+    end
   end
 
   defp build_skills_summary(resume) do
@@ -227,14 +270,38 @@ defmodule BotArmyJobApplications.RecommendationScorer do
   defp build_listing_summary(listing) do
     company = listing["company"]
     role = listing["role_title"]
+    jd_text = listing["jd_text"] || ""
     jd_tags = listing["jd_tags"] || %{}
     technologies = jd_tags["technologies"] || []
     frameworks = jd_tags["frameworks"] || []
+    salary_range = listing["salary_range"] || %{}
+
+    # Truncate JD text to reasonable length if needed (e.g., first 1500 chars)
+    jd_preview = if String.length(jd_text) > 1500 do
+      String.slice(jd_text, 0, 1500) <> "\n... [full JD available]"
+    else
+      jd_text
+    end
+
+    salary_line = case {salary_range["min"], salary_range["max"]} do
+      {min, max} when is_number(min) and is_number(max) ->
+        "Salary Range: $#{min}k - $#{max}k"
+      {min, _} when is_number(min) ->
+        "Starting Salary: $#{min}k+"
+      _ ->
+        "Salary: Not specified"
+    end
 
     """
-    #{company} — #{role}
-    Technologies: #{Enum.join(technologies, ", ")}
-    Frameworks: #{Enum.join(frameworks, ", ")}
+    ROLE: #{role}
+    COMPANY: #{company}
+    #{salary_line}
+
+    TECHNOLOGIES & FRAMEWORKS:
+    #{if Enum.empty?(technologies ++ frameworks), do: "Not specified", else: Enum.join(technologies ++ frameworks, ", ")}
+
+    JOB DESCRIPTION:
+    #{if jd_preview == "", do: "No description available", else: jd_preview}
     """
   end
 
