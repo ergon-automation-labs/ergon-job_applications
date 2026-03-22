@@ -47,6 +47,10 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
             case listing_store().list([]) do
               {:ok, listings} ->
                 # Synchronous: tag overlap scoring
+                Logger.info("handle_recommend: Resume has #{length(resume["skills"] || [])} skills and #{length(resume["roles"] || [])} roles")
+                Logger.debug("Resume skills: #{inspect(resume["skills"])}")
+                Logger.debug("Sample listing: #{inspect(List.first(listings))}")
+
                 scored_pairs = RecommendationScorer.shortlist(listings, resume, limit)
                 recommendations = Enum.map(scored_pairs, fn {listing, score} ->
                   %{

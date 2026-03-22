@@ -27,10 +27,12 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
     # Jaccard similarity: |intersection| / |union|
     jaccard = if Enum.empty?(listing_tags) or Enum.empty?(resume_tags) do
+      Logger.debug("tag_overlap_score: listing_tags=#{MapSet.size(listing_tags)}, resume_tags=#{MapSet.size(resume_tags)}")
       0.0
     else
       intersection = listing_tags |> MapSet.intersection(resume_tags) |> MapSet.size()
       union = listing_tags |> MapSet.union(resume_tags) |> MapSet.size()
+      Logger.debug("tag_overlap_score: intersection=#{intersection}, union=#{union}")
       intersection / union
     end
 
