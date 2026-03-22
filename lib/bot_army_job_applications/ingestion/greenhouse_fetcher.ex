@@ -32,17 +32,24 @@ defmodule BotArmyJobApplications.Ingestion.GreenhouseFetcher do
   end
 
   defp to_listing_payload(job, board_token, company_name) do
-    location_name = get_in(job, ["location", "name"])
-    role_suffix = if location_name && location_name != "", do: " (#{location_name})", else: ""
-    role_title = (job["title"] || "Unknown") <> role_suffix
+    location_data = get_in(job, ["location"]) || %{}
+    location = if is_map(location_data) and map_size(location_data) > 0 do
+      %{
+        "name" => location_data["name"],
+        "kind" => location_data["kind"]
+      }
+    else
+      nil
+    end
 
     %{
       "source" => "greenhouse",
       "source_url" => "https://boards.greenhouse.io/#{board_token}",
       "company" => company_name,
-      "role_title" => role_title,
+      "role_title" => job["title"] || "Unknown",
       "jd_url" => job["absolute_url"],
       "jd_text" => job["content"] || "",
+      "location" => location,
       "salary_range" => nil,
       "discovered_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
     }

@@ -39,8 +39,11 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     # Salary alignment bonus (reuse Ranking logic pattern)
     salary_bonus = salary_alignment_bonus(listing["salary_range"], resume)
 
-    # Blend: 80% Jaccard, 20% salary alignment
-    (jaccard * 0.8 + salary_bonus * 0.2)
+    # Location bonus (remote jobs always match, others neutral for now)
+    location_bonus = location_bonus(listing["location"])
+
+    # Blend: 70% Jaccard, 15% salary, 15% location
+    (jaccard * 0.70 + salary_bonus * 0.15 + location_bonus * 0.15)
     |> max(0.0)
     |> min(1.0)
   end
@@ -116,6 +119,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     - Specific accomplishments that align with role responsibilities
     - Seniority/experience level alignment
     - Salary range compatibility
+    - Location fit (based on job location and candidate preferences if apparent)
     - Growth/learning opportunity potential
 
     Respond with JSON:
@@ -232,6 +236,21 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   defp salary_alignment_bonus(_, _), do: 0.5
 
+  defp location_bonus(location) when is_map(location) do
+    # Remote or hybrid jobs always match (no geographic constraint)
+    location_name = location["name"] || ""
+    location_kind = location["kind"] || ""
+
+    cond do
+      String.downcase(location_kind) in ["remote", "hybrid"] -> 1.0
+      String.downcase(location_name) =~ ~r/(remote|work from home)/i -> 1.0
+      is_binary(location_name) and location_name != "" -> 0.5  # Specific location, neutral for now
+      true -> 0.5  # Unknown location, neutral
+    end
+  end
+
+  defp location_bonus(_), do: 0.5
+
   defp build_resume_summary(resume) do
     identity = resume["identity"] || %{}
     name = identity["name"] || "Candidate"
@@ -303,6 +322,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     technologies = jd_tags["technologies"] || []
     frameworks = jd_tags["frameworks"] || []
     salary_range = listing["salary_range"] || %{}
+    location = listing["location"] || %{}
 
     # Truncate JD text to reasonable length if needed (e.g., first 1500 chars)
     jd_preview = if String.length(jd_text) > 1500 do
@@ -320,9 +340,17 @@ defmodule BotArmyJobApplications.RecommendationScorer do
         "Salary: Not specified"
     end
 
+    location_line = case location do
+      %{"name" => name} when is_binary(name) and name != "" ->
+        "Location: #{name}"
+      _ ->
+        "Location: Not specified"
+    end
+
     """
     ROLE: #{role}
     COMPANY: #{company}
+    #{location_line}
     #{salary_line}
 
     TECHNOLOGIES & FRAMEWORKS:

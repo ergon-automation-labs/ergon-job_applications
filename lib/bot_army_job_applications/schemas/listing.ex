@@ -18,6 +18,7 @@ defmodule BotArmyJobApplications.Schemas.Listing do
     field :jd_url, :string
     field :jd_tags, :map
     field :salary_range, :map
+    field :location, :map
     field :coverage_score, :float
     field :status, :string
     field :discovered_at, :naive_datetime
@@ -42,6 +43,7 @@ defmodule BotArmyJobApplications.Schemas.Listing do
       :jd_url,
       :jd_tags,
       :salary_range,
+      :location,
       :coverage_score,
       :status,
       :discovered_at,

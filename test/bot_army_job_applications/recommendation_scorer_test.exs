@@ -161,13 +161,13 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       assert RecommendationScorer.tag_overlap_score(%{}, nil) == 0.0
     end
 
-    test "returns > 0.0 when no tags overlap (due to salary bonus fallback)" do
+    test "returns > 0.0 when no tags overlap (due to salary and location bonus fallback)" do
       listing = %{"jd_tags" => %{"technologies" => ["Rust", "Go"]}}
       resume = %{"skills" => [%{"name" => "Elixir"}], "roles" => []}
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # Score is 0.0 jaccard + 0.5 salary bonus (default) * 0.2 = 0.1
-      assert score == 0.1
+      # Score is 0.0 jaccard (70%) + 0.5 salary bonus (15%) + 0.5 location bonus (15%) = 0.15
+      assert score == 0.15
     end
 
     test "returns > 0.0 when tags overlap" do
