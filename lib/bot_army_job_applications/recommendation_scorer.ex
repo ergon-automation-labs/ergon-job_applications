@@ -168,9 +168,35 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     technologies = jd_tags["technologies"] || []
     frameworks = jd_tags["frameworks"] || []
 
-    (technologies ++ frameworks)
+    # If no structured tags, extract keywords from jd_text
+    tags = if Enum.empty?(technologies) and Enum.empty?(frameworks) do
+      extract_keywords_from_text(listing["jd_text"] || "")
+    else
+      technologies ++ frameworks
+    end
+
+    tags
     |> Enum.map(&String.downcase/1)
     |> MapSet.new()
+  end
+
+  # Extract common technology keywords from job description text
+  defp extract_keywords_from_text(text) when is_binary(text) do
+    # Common tech keywords to look for (case-insensitive)
+    keywords = ~w(
+      python javascript ruby java golang rust elixir
+      typescript react vue angular nodejs express django rails
+      aws gcp azure docker kubernetes terraform ansible saltstack git
+      postgresql mysql mongodb redis cassandra elasticsearch
+      rest graphql grpc http soap
+      linux ubuntu debian centos redhat
+      jenkins gitlab travis circleci github
+      agile scrum kanban
+    )
+
+    text_lower = String.downcase(text)
+    keywords
+    |> Enum.filter(&String.contains?(text_lower, &1))
   end
 
   defp extract_resume_tags(resume) do
