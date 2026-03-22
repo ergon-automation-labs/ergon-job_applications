@@ -22,7 +22,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
       "identity": {
         "name": "...",
         "summary": "...",
-        "location_preferences": "San Francisco, Austin, Remote OK" (optional)
+        "location_preferences": "San Francisco, Austin, Remote OK" (optional),
+        "salary_floor": 150 (optional, in thousands)
       },
       "roles": [
         { "title": "...", "company": "...", "start_date": "YYYY-MM", "end_date": "YYYY-MM", "bullets": ["text1", "text2"] }
@@ -48,7 +49,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
   def handle_create(_), do: %{"ok" => false, "error" => "invalid_payload"}
 
   @doc """
-  Update an existing resume, replacing all roles and skills.
+  Update an existing resume, replacing all identity, roles and skills.
 
   Payload: same as create, plus top-level "resume_id": "uuid"
 

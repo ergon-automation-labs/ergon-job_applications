@@ -102,10 +102,12 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     skills_summary = build_skills_summary(resume)
     listing_summary = build_listing_summary(listing)
     location_preferences = build_location_preferences(resume)
+    salary_expectations = build_salary_expectations(resume)
 
     """
     #{resume_summary}
     #{location_preferences}
+    #{salary_expectations}
 
     PROFESSIONAL EXPERIENCE:
     #{experience_summary}
@@ -120,7 +122,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     - Relevance of skills and experience to explicit job requirements
     - Specific accomplishments that align with role responsibilities
     - Seniority/experience level alignment
-    - Salary range compatibility
+    - Salary range compatibility (candidate's minimum vs job offering)
     - Location fit (based on job location and candidate preferences)
     - Growth/learning opportunity potential
 
@@ -229,11 +231,43 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     |> MapSet.new()
   end
 
-  defp salary_alignment_bonus(salary_range, _resume) when is_map(salary_range) do
-    # Check if salary_range is reasonable vs resume expectations
-    # Simple heuristic: mid-point salary vs experience level
-    # For now, neutral bonus (0.5) unless we have resume salary expectations
-    0.5
+  defp salary_alignment_bonus(salary_range, resume) when is_map(salary_range) do
+    # Check if salary_range meets resume floor expectations
+    identity = resume["identity"] || %{}
+    salary_floor = identity["salary_floor"]
+
+    # If no floor set, neutral (0.5)
+    if not salary_floor or not is_integer(salary_floor) or salary_floor <= 0 do
+      0.5
+    else
+      # Get job's salary max (or min if max unavailable)
+      job_max = salary_range["max"]
+      job_min = salary_range["min"]
+      job_salary = cond do
+        is_number(job_max) -> job_max
+        is_number(job_min) -> job_min
+        true -> nil
+      end
+
+      # Compare against floor: scale penalty/bonus
+      cond do
+        is_nil(job_salary) ->
+          # No salary data, neutral
+          0.5
+
+        job_salary >= salary_floor ->
+          # Job meets or exceeds floor: bonus
+          # Scale from 0.5 (at floor) to 1.0 (at 1.5x floor)
+          bonus = min(0.5 + (job_salary - salary_floor) / (salary_floor * 0.5), 1.0)
+          max(bonus, 0.5)
+
+        true ->
+          # Job is below floor: penalty
+          # Scale from 0.5 (at floor) to 0.0 (at 0.5x floor)
+          penalty = (job_salary / salary_floor) * 0.5
+          max(penalty, 0.0)
+      end
+    end
   end
 
   defp salary_alignment_bonus(_, _), do: 0.5
@@ -271,6 +305,17 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
     if location_prefs && is_binary(location_prefs) && location_prefs != "" do
       "Location Preferences: #{location_prefs}"
+    else
+      ""
+    end
+  end
+
+  defp build_salary_expectations(resume) do
+    identity = resume["identity"] || %{}
+    salary_floor = identity["salary_floor"]
+
+    if salary_floor && is_integer(salary_floor) && salary_floor > 0 do
+      "Salary Floor: $#{salary_floor}k/year minimum"
     else
       ""
     end
