@@ -224,6 +224,8 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     end
   end
 
+  defp enrich_payload_from_listing(payload), do: payload
+
   defp validate_create_payload(payload) when is_map(payload) do
     with :ok <- require_field(payload, "company"),
          :ok <- require_field(payload, "role_title") do
