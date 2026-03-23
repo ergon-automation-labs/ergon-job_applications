@@ -53,8 +53,12 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
                 scored_pairs = RecommendationScorer.shortlist(listings, resume, limit)
                 recommendations = Enum.map(scored_pairs, fn {listing, score} ->
+                  role_title = listing["role_title"]
                   %{
-                    "listing" => listing,
+                    "listing" => Map.merge(listing, %{
+                      "seniority_level" => extract_seniority(role_title),
+                      "role_type" => extract_role_type(role_title)
+                    }),
                     "score" => (score * 100) |> Float.round(0) |> trunc(),
                     "reason" => "Tag match"
                   }
@@ -210,6 +214,46 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
     :ok
   end
+
+  # Seniority and role type extraction for recommendations
+
+  @seniority_patterns [
+    {~r/\b(intern|internship)\b/i, "Intern"},
+    {~r/\b(junior|jr\.?|entry.?level|associate)\b/i, "Junior"},
+    {~r/\b(staff)\b/i, "Staff"},
+    {~r/\b(principal)\b/i, "Principal"},
+    {~r/\b(senior|sr\.?|lead)\b/i, "Senior"},
+    {~r/\b(director)\b/i, "Director"},
+    {~r/\b(manager|mgr)\b/i, "Manager"}
+  ]
+
+  defp extract_seniority(nil), do: nil
+  defp extract_seniority(role_title) when is_binary(role_title) do
+    case Enum.find(@seniority_patterns, fn {pattern, _} -> Regex.match?(pattern, role_title) end) do
+      {_, level} -> level
+      nil -> nil
+    end
+  end
+  defp extract_seniority(_), do: nil
+
+  @role_type_patterns [
+    {~r/\b(devops|sre|platform|infrastructure|infra|reliability)\b/i, "Infrastructure"},
+    {~r/\b(data scientist|data engineer|ml|machine learning|ai|analytics)\b/i, "Data/ML"},
+    {~r/\b(security|appsec|devsecops)\b/i, "Security"},
+    {~r/\b(product manager|product owner|pm\b)\b/i, "Product"},
+    {~r/\b(designer|ux|ui|frontend)\b/i, "Design"},
+    {~r/\b(engineer|developer|programmer|sde|swe|software)\b/i, "Engineering"},
+    {~r/\b(manager|director|vp|head of)\b/i, "Management"}
+  ]
+
+  defp extract_role_type(nil), do: nil
+  defp extract_role_type(role_title) when is_binary(role_title) do
+    case Enum.find(@role_type_patterns, fn {pattern, _} -> Regex.match?(pattern, role_title) end) do
+      {_, type} -> type
+      nil -> nil
+    end
+  end
+  defp extract_role_type(_), do: nil
 
   # Private helpers
 
