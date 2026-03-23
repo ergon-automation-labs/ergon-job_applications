@@ -19,7 +19,10 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   Returns score 0.0-1.0 based on:
   - Jaccard similarity of listing tags vs resume tags
+  - Seniority level match against target preferences
+  - Role type match against target preferences
   - Salary alignment (bonus/penalty based on range match)
+  - Location alignment (bonus/penalty based on preferences)
   """
   def tag_overlap_score(listing, resume) when is_map(listing) and is_map(resume) do
     listing_tags = extract_listing_tags(listing)
@@ -36,14 +39,21 @@ defmodule BotArmyJobApplications.RecommendationScorer do
       intersection / union
     end
 
-    # Salary alignment bonus (reuse Ranking logic pattern)
+    # Seniority level match bonus
+    seniority_bonus = seniority_match_bonus(listing, resume)
+
+    # Role type match bonus
+    role_type_bonus = role_type_match_bonus(listing, resume)
+
+    # Salary alignment bonus
     salary_bonus = salary_alignment_bonus(listing["salary_range"], resume)
 
-    # Location bonus (compare job location against resume preferences)
+    # Location bonus
     location_bonus = location_bonus(listing["location"], resume)
 
-    # Blend: 70% Jaccard, 15% salary, 15% location
-    (jaccard * 0.70 + salary_bonus * 0.15 + location_bonus * 0.15)
+    # Blend: 50% Jaccard, 15% seniority, 15% role_type, 10% salary, 10% location
+    (jaccard * 0.50 + seniority_bonus * 0.15 + role_type_bonus * 0.15 +
+     salary_bonus * 0.10 + location_bonus * 0.10)
     |> max(0.0)
     |> min(1.0)
   end
@@ -329,6 +339,57 @@ defmodule BotArmyJobApplications.RecommendationScorer do
   end
 
   defp location_bonus(_, _), do: 0.5
+
+  # Check if listing seniority level matches candidate's target preferences
+  defp seniority_match_bonus(listing, resume) when is_map(listing) and is_map(resume) do
+    identity = resume["identity"] || %{}
+    target_seniority = parse_target_list(identity["target_seniority"])
+    listing_seniority = listing["seniority_level"]
+
+    # If no target preferences set, neutral
+    if Enum.empty?(target_seniority) do
+      0.5
+    else
+      # If listing seniority matches target, full bonus
+      if listing_seniority && listing_seniority in target_seniority do
+        1.0
+      else
+        # No match: penalty
+        0.1
+      end
+    end
+  end
+
+  defp seniority_match_bonus(_, _), do: 0.5
+
+  # Check if listing role type matches candidate's target role types
+  defp role_type_match_bonus(listing, resume) when is_map(listing) and is_map(resume) do
+    identity = resume["identity"] || %{}
+    target_roles = parse_target_list(identity["target_roles"])
+    listing_role_type = listing["role_type"]
+    role_title = listing["role_title"] || ""
+
+    # If no target preferences set, neutral
+    if Enum.empty?(target_roles) do
+      0.5
+    else
+      # Check if any target role is mentioned in role_title (partial match)
+      role_match = Enum.any?(target_roles, fn target_role ->
+        String.contains?(String.downcase(role_title), String.downcase(target_role))
+      end)
+
+      # Also check extracted role_type if available
+      type_match = listing_role_type && listing_role_type in target_roles
+
+      cond do
+        type_match -> 1.0
+        role_match -> 0.8
+        true -> 0.1
+      end
+    end
+  end
+
+  defp role_type_match_bonus(_, _), do: 0.5
 
   defp build_resume_summary(resume) do
     identity = resume["identity"] || %{}
