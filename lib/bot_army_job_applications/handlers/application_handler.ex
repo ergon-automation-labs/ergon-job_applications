@@ -16,6 +16,10 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
   end
 
+  defp listing_store do
+    Application.get_env(:bot_army_job_applications, :listing_store, BotArmyJobApplications.ListingStore)
+  end
+
   @doc """
   Handle application creation.
 
@@ -25,7 +29,10 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     event_id = message["event_id"]
     payload = message["payload"]
 
-    case validate_create_payload(payload) do
+    # Enrich payload with listing data if listing_id is provided
+    enriched_payload = enrich_payload_from_listing(payload)
+
+    case validate_create_payload(enriched_payload) do
       :ok ->
         case create_application(payload) do
           {:ok, application} ->
@@ -194,6 +201,28 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   end
 
   # Private helpers
+
+  defp enrich_payload_from_listing(payload) when is_map(payload) do
+    listing_id = payload["listing_id"]
+
+    if listing_id && listing_id != "" do
+      case listing_store().get(listing_id) do
+        {:ok, listing} ->
+          # Merge listing data into payload, preferring explicit fields over listing defaults
+          payload
+          |> Map.put_new("company", listing["company"])
+          |> Map.put_new("role_title", listing["role_title"] || listing["title"])
+          |> Map.put_new("jd_url", listing["jd_url"])
+          |> Map.put("listing_id", listing_id)
+
+        {:error, _reason} ->
+          Logger.warning("Could not find listing #{listing_id}")
+          payload
+      end
+    else
+      payload
+    end
+  end
 
   defp validate_create_payload(payload) when is_map(payload) do
     with :ok <- require_field(payload, "company"),
