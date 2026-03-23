@@ -55,15 +55,26 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
                 recommendations = Enum.map(scored_pairs, fn {listing, score} ->
                   role_title = listing["role_title"]
                   jd_text = listing["jd_text"]
+                  required_skills = extract_required_skills(jd_text)
+
+                  # Merge extracted fields into listing
+                  enriched_listing = Map.merge(listing, %{
+                    "seniority_level" => extract_seniority(role_title),
+                    "role_type" => extract_role_type(role_title),
+                    "salary_range" => listing["salary_range"] || extract_salary(jd_text),
+                    "location" => listing["location"] || extract_location(jd_text),
+                    "required_skills" => required_skills
+                  })
+
+                  # Check if matches target profile and apply score boost
+                  target_match = matches_target_profile?(enriched_listing, resume)
+                  boosted_score = if target_match, do: score * 1.25, else: score
+
                   %{
-                    "listing" => Map.merge(listing, %{
-                      "seniority_level" => extract_seniority(role_title),
-                      "role_type" => extract_role_type(role_title),
-                      "salary_range" => listing["salary_range"] || extract_salary(jd_text),
-                      "location" => listing["location"] || extract_location(jd_text)
-                    }),
-                    "score" => (score * 100) |> Float.round(0) |> trunc(),
-                    "reason" => "Tag match"
+                    "listing" => enriched_listing,
+                    "score" => (boosted_score * 100) |> Float.round(0) |> trunc(),
+                    "reason" => "Tag match",
+                    "target_match" => target_match
                   }
                 end)
 
@@ -298,6 +309,83 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   end
 
   defp extract_location(_), do: nil
+
+  # Required skills extraction from JD text
+  # Looks for common infrastructure/platform/mlops keywords
+
+  @required_skills [
+    {"terraform", "Terraform"},
+    {"kubernetes", "Kubernetes"},
+    {"docker", "Docker"},
+    {"aws", "AWS"},
+    {"gcp", "Google Cloud"},
+    {"azure", "Azure"},
+    {"golang", "Go"},
+    {"rust", "Rust"},
+    {"python", "Python"},
+    {"distributed systems", "Distributed Systems"},
+    {"microservices", "Microservices"},
+    {"devops", "DevOps"},
+    {"ci/cd", "CI/CD"},
+    {"helm", "Helm"},
+    {"prometheus", "Prometheus"},
+    {"grafana", "Grafana"},
+    {"linux", "Linux"},
+    {"bash", "Bash"},
+    {"sql", "SQL"},
+    {"postgresql", "PostgreSQL"},
+  ]
+
+  defp extract_required_skills(jd_text) when is_binary(jd_text) and jd_text != "" do
+    lower_text = String.downcase(jd_text)
+
+    found_skills =
+      @required_skills
+      |> Enum.filter(fn {keyword, _label} -> String.contains?(lower_text, keyword) end)
+      |> Enum.map(fn {_keyword, label} -> label end)
+
+    case found_skills do
+      [] -> nil
+      skills -> skills
+    end
+  end
+
+  defp extract_required_skills(_), do: nil
+
+  # Target profile matching: checks if listing matches resume's target preferences
+  defp matches_target_profile?(listing, resume) do
+    target_seniority = Map.get(resume, "target_seniority") || []
+    target_roles = Map.get(resume, "target_roles") || []
+    target_skills = Map.get(resume, "target_skills") || []
+
+    # If no target preferences set, all listings are considered matches
+    if Enum.empty?(target_seniority) and Enum.empty?(target_roles) and
+         Enum.empty?(target_skills) do
+      false
+    else
+      role_title = listing["role_title"] || ""
+      listing_seniority = listing["seniority_level"]
+      listing_skills = listing["required_skills"] || []
+
+      seniority_match = Enum.empty?(target_seniority) or (listing_seniority in target_seniority)
+
+      role_match =
+        Enum.empty?(target_roles) or
+          Enum.any?(target_roles, fn target_role ->
+            String.contains?(String.downcase(role_title), String.downcase(target_role))
+          end)
+
+      skill_match =
+        Enum.empty?(target_skills) or
+          Enum.any?(target_skills, fn target_skill ->
+            Enum.any?(listing_skills, fn skill ->
+              String.contains?(String.downcase(skill), String.downcase(target_skill))
+            end)
+          end)
+
+      seniority_match and role_match and skill_match
+    end
+  end
 
   # Private helpers
 
