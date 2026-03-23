@@ -166,8 +166,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       resume = %{"skills" => [%{"name" => "Elixir"}], "roles" => []}
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # Score is 0.0 jaccard (70%) + 0.5 salary bonus (15%) + 0.5 location bonus (15%) = 0.15
-      assert score == 0.15
+      # Score is 0.0*0.50 (jaccard) + 0.5*0.15 (seniority) + 0.5*0.15 (role) + 0.5*0.10 (salary) + 0.5*0.10 (location) = 0.25
+      assert score == 0.25
     end
 
     test "returns > 0.0 when tags overlap" do
@@ -195,8 +195,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # 0.0*0.70 + 0.5*0.15 + 1.0*0.15 = 0.225
-      assert_in_delta score, 0.225, 0.001
+      # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 1.0*0.10 = 0.30
+      assert_in_delta score, 0.30, 0.001
     end
     test "hybrid jobs score 1.0 location bonus" do
       resume = %{
@@ -212,7 +212,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      assert_in_delta score, 0.225, 0.001
+      assert_in_delta score, 0.30, 0.001
     end
 
     test "job city matching user preference scores 1.0 location bonus" do
@@ -229,8 +229,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # 0.0*0.70 + 0.5*0.15 + 1.0*0.15 = 0.225
-      assert_in_delta score, 0.225, 0.001
+      # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 1.0*0.10 = 0.30
+      assert_in_delta score, 0.30, 0.001
     end
 
     test "job city NOT in preferences scores 0.3 location bonus" do
@@ -247,8 +247,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # 0.0*0.70 + 0.5*0.15 + 0.3*0.15 = 0.12
-      assert_in_delta score, 0.12, 0.001
+      # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 0.3*0.10 = 0.23
+      assert_in_delta score, 0.23, 0.001
     end
 
     test "remote preference + city in preferences scores 0.8" do
@@ -265,8 +265,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # 0.0*0.70 + 0.5*0.15 + 0.8*0.15 = 0.195
-      assert_in_delta score, 0.195, 0.001
+      # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 0.8*0.10 = 0.28
+      assert_in_delta score, 0.28, 0.001
     end
 
     test "remote preference + city NOT in preferences scores 0.2" do
@@ -283,8 +283,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # 0.0*0.70 + 0.5*0.15 + 0.2*0.15 = 0.105
-      assert_in_delta score, 0.105, 0.001
+      # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 0.2*0.10 = 0.22
+      assert_in_delta score, 0.22, 0.001
     end
 
     test "no location preferences set scores 0.5 location bonus" do
@@ -301,8 +301,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      # 0.0*0.70 + 0.5*0.15 + 0.5*0.15 = 0.15
-      assert score == 0.15
+      # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 0.5*0.10 = 0.25
+      assert score == 0.25
     end
 
     test "location matching is case insensitive" do
@@ -319,7 +319,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       }
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
-      assert_in_delta score, 0.225, 0.001
+      assert_in_delta score, 0.30, 0.001
     end
   end
 
