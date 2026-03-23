@@ -54,10 +54,13 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
                 scored_pairs = RecommendationScorer.shortlist(listings, resume, limit)
                 recommendations = Enum.map(scored_pairs, fn {listing, score} ->
                   role_title = listing["role_title"]
+                  jd_text = listing["jd_text"]
                   %{
                     "listing" => Map.merge(listing, %{
                       "seniority_level" => extract_seniority(role_title),
-                      "role_type" => extract_role_type(role_title)
+                      "role_type" => extract_role_type(role_title),
+                      "salary_range" => listing["salary_range"] || extract_salary(jd_text),
+                      "location" => listing["location"] || extract_location(jd_text)
                     }),
                     "score" => (score * 100) |> Float.round(0) |> trunc(),
                     "reason" => "Tag match"
@@ -254,6 +257,47 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     end
   end
   defp extract_role_type(_), do: nil
+
+  # Salary and location extraction from JD text
+
+  @salary_patterns [
+    ~r/\$?([\d,]+)\s*(?:k|K)\s*-\s*\$?([\d,]+)\s*(?:k|K)/,  # $100k-$150k or 100k-150k
+    ~r/\$?([\d,]+)\s*(?:k|K)\s*(?:per|p\/|\/)/,             # $100k per year
+    ~r/\$?([\d,]+)(?:,\d{3})\s*-\s*\$?([\d,]+)(?:,\d{3})/  # $100,000 - $150,000
+  ]
+
+  defp extract_salary(jd_text) when is_binary(jd_text) and jd_text != "" do
+    case Enum.find_value(@salary_patterns, fn pattern ->
+      case Regex.scan(pattern, jd_text) do
+        [[match | _]] -> match
+        [[_, min, max | _]] -> "#{min}k-#{max}k"
+        _ -> nil
+      end
+    end) do
+      nil -> nil
+      salary -> %{"range" => salary}
+    end
+  end
+
+  defp extract_salary(_), do: nil
+
+  defp extract_location(jd_text) when is_binary(jd_text) and jd_text != "" do
+    cond do
+      Regex.match?(~r/remote/i, jd_text) ->
+        %{"type" => "remote"}
+
+      Regex.match?(~r/hybrid/i, jd_text) ->
+        %{"type" => "hybrid"}
+
+      true ->
+        case Regex.scan(~r/\b([A-Z][a-z]+),\s*([A-Z]{2})\b/, jd_text) do
+          [[city, state] | _] -> %{"city" => city, "state" => state}
+          _ -> nil
+        end
+    end
+  end
+
+  defp extract_location(_), do: nil
 
   # Private helpers
 
