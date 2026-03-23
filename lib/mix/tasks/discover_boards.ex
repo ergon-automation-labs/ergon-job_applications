@@ -26,6 +26,8 @@ defmodule Mix.Tasks.JobApplications.DiscoverBoards do
       {"Replicate", "replicate", "greenhouse"},
       {"CoreWeave", "coreweave", "greenhouse"},
       {"Lightning AI", "lightning", "greenhouse"},
+      {"Mistral AI", "mistral", "greenhouse"},
+      {"Weights & Biases", "weightsandbiases", "greenhouse"},
     ],
     "devtools" => [
       {"Cursor", "cursor", "greenhouse"},
@@ -36,6 +38,12 @@ defmodule Mix.Tasks.JobApplications.DiscoverBoards do
       {"Astro", "astro", "greenhouse"},
       {"Prisma", "prisma", "greenhouse"},
       {"Svelte", "svelte", "greenhouse"},
+      {"Figma", "figma", "greenhouse"},
+      {"Linear", "linear", "greenhouse"},
+      {"Stripe", "stripe", "lever"},
+      {"Twilio", "twilio", "greenhouse"},
+      {"Auth0", "auth0", "greenhouse"},
+      {"Segment", "segment", "greenhouse"},
     ],
     "infra" => [
       {"Cloudflare", "cloudflare", "greenhouse"},
@@ -46,6 +54,10 @@ defmodule Mix.Tasks.JobApplications.DiscoverBoards do
       {"PlanetScale", "planetscale", "greenhouse"},
       {"Railway", "railway", "greenhouse"},
       {"Wiz", "wiz", "greenhouse"},
+      {"DigitalOcean", "digitalocean", "greenhouse"},
+      {"Kong", "kong", "greenhouse"},
+      {"Datadog", "datadog", "greenhouse"},
+      {"Lacework", "lacework", "greenhouse"},
     ]
   }
 
