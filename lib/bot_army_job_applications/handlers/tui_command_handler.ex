@@ -16,6 +16,10 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
     Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
   end
 
+  defp listing_store do
+    Application.get_env(:bot_army_job_applications, :listing_store, BotArmyJobApplications.ListingStore)
+  end
+
   @doc """
   Build snapshot payload for TUI: list applications and map to TUI format.
   Returns map suitable for JSON: %{"applications" => [%{"id" => ..., "company" => ..., ...}, ...]}.
@@ -35,12 +39,39 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   end
 
   @doc """
-  Handle create command from TUI. Payload: id (optional), company, role, status, stage, location, last_contact, notes.
+  Handle create command from TUI. Payload can be:
+  1. listing_id: Apply directly from listings (looks up company/role from listing)
+  2. company + role: Manual entry (requires both fields)
+
   Creates application and starts ApplicationServer; publishes snapshot.
   """
   def handle_create(payload) when is_map(payload) do
-    company = trim(payload["company"])
-    role = trim(payload["role"])
+    # Check if this is a listing_id-based create (from listings view)
+    listing_id = trim(payload["listing_id"])
+
+    {company, role, jd_url} =
+      if listing_id != "" do
+        # Look up listing to get company and role
+        case listing_store().get(listing_id) do
+          {:ok, listing} ->
+            {
+              listing["company"] || "",
+              listing["role_title"] || listing["title"] || "",
+              listing["jd_url"] || ""
+            }
+
+          {:error, _reason} ->
+            Logger.warning("TUI create: listing #{listing_id} not found")
+            {"", "", ""}
+        end
+      else
+        {
+          trim(payload["company"]),
+          trim(payload["role"]),
+          trim(payload["jd_url"] || "")
+        }
+      end
+
     status = trim(payload["status"]) || "Applied"
     stage = trim(payload["stage"])
     _location = trim(payload["location"])
@@ -70,7 +101,13 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
         if stage != "", do: Map.put(create_payload, "next_action", stage), else: create_payload
       create_payload =
         if notes != "", do: Map.put(create_payload, "strategy", notes), else: create_payload
-      jd_url = trim(payload["jd_url"] || "")
+      # Use jd_url from listing if available, else use from payload
+      jd_url =
+        if jd_url != "" do
+          jd_url
+        else
+          trim(payload["jd_url"] || "")
+        end
       create_payload =
         if jd_url != "", do: Map.put(create_payload, "jd_url", jd_url), else: create_payload
       create_payload =
