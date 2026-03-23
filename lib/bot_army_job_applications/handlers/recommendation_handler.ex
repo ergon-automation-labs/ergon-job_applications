@@ -354,18 +354,21 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
   # Target profile matching: checks if listing matches resume's target preferences
   defp matches_target_profile?(listing, resume) do
-    target_seniority = Map.get(resume, "target_seniority") || []
-    target_roles = Map.get(resume, "target_roles") || []
-    target_skills = Map.get(resume, "target_skills") || []
+    identity = resume["identity"] || %{}
+    target_seniority = parse_preference_string(identity["target_seniority"])
+    target_roles = parse_preference_string(identity["target_roles"])
+    target_skills = parse_preference_string(identity["target_skills"])
+    location_prefs = parse_preference_string(identity["location_preferences"])
 
-    # If no target preferences set, all listings are considered matches
+    # If no target preferences set, listing does not match (return false, not a special match)
     if Enum.empty?(target_seniority) and Enum.empty?(target_roles) and
-         Enum.empty?(target_skills) do
+         Enum.empty?(target_skills) and Enum.empty?(location_prefs) do
       false
     else
       role_title = listing["role_title"] || ""
       listing_seniority = listing["seniority_level"]
       listing_skills = listing["required_skills"] || []
+      listing_location = listing["location"] || %{}
 
       seniority_match = Enum.empty?(target_seniority) or (listing_seniority in target_seniority)
 
@@ -383,9 +386,50 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
             end)
           end)
 
-      seniority_match and role_match and skill_match
+      location_match = Enum.empty?(location_prefs) or matches_location?(listing_location, location_prefs)
+
+      seniority_match and role_match and skill_match and location_match
     end
   end
+
+  # Parse newline-separated preference string into trimmed list
+  defp parse_preference_string(nil), do: []
+  defp parse_preference_string(""), do: []
+
+  defp parse_preference_string(str) when is_binary(str) do
+    str
+    |> String.split("\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp parse_preference_string(_), do: []
+
+  # Check if listing location matches any location preference
+  defp matches_location?(listing_location, location_prefs) when is_map(listing_location) do
+    location_type = Map.get(listing_location, "type", "")
+    location_city = Map.get(listing_location, "city", "") |> String.downcase()
+    location_state = Map.get(listing_location, "state", "") |> String.downcase()
+
+    Enum.any?(location_prefs, fn pref ->
+      pref_lower = String.downcase(pref)
+
+      cond do
+        pref_lower == "remote" -> location_type == "remote"
+        pref_lower == "hybrid" -> location_type == "hybrid"
+        String.contains?(pref_lower, ",") ->
+          # Handle "City, ST" format
+          [pref_city, pref_state] = pref_lower |> String.split(",") |> Enum.map(&String.trim/1)
+          location_city == String.downcase(pref_city) and location_state == String.downcase(pref_state)
+
+        true ->
+          # Partial match on city name
+          String.contains?(location_city, pref_lower) or String.contains?(location_state, pref_lower)
+      end
+    end)
+  end
+
+  defp matches_location?(_, _), do: false
 
   # Private helpers
 
