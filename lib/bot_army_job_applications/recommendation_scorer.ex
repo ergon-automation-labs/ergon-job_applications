@@ -103,11 +103,13 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     listing_summary = build_listing_summary(listing)
     location_preferences = build_location_preferences(resume)
     salary_expectations = build_salary_expectations(resume)
+    target_preferences = build_target_preferences(resume)
 
     """
     #{resume_summary}
     #{location_preferences}
     #{salary_expectations}
+    #{target_preferences}
 
     PROFESSIONAL EXPERIENCE:
     #{experience_summary}
@@ -121,7 +123,9 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     Assess this match on a scale of 0-100. Consider:
     - Relevance of skills and experience to explicit job requirements
     - Specific accomplishments that align with role responsibilities
-    - Seniority/experience level alignment
+    - Seniority/experience level alignment with candidate's target levels
+    - Role type fit (engineering, infrastructure, data/ML, security, product, design, management)
+    - Required skills match with candidate's target skills
     - Salary range compatibility (candidate's minimum vs job offering)
     - Location fit (based on job location and candidate preferences)
     - Growth/learning opportunity potential
@@ -359,6 +363,49 @@ defmodule BotArmyJobApplications.RecommendationScorer do
       ""
     end
   end
+
+  defp build_target_preferences(resume) do
+    identity = resume["identity"] || %{}
+    target_seniority = parse_target_list(identity["target_seniority"])
+    target_roles = parse_target_list(identity["target_roles"])
+    target_skills = parse_target_list(identity["target_skills"])
+
+    preferences = []
+
+    preferences = if !Enum.empty?(target_seniority) do
+      preferences ++ ["Target Seniority: #{Enum.join(target_seniority, ", ")}"]
+    else
+      preferences
+    end
+
+    preferences = if !Enum.empty?(target_roles) do
+      preferences ++ ["Target Role Types: #{Enum.join(target_roles, ", ")}"]
+    else
+      preferences
+    end
+
+    preferences = if !Enum.empty?(target_skills) do
+      preferences ++ ["Interested in: #{Enum.join(target_skills, ", ")}"]
+    else
+      preferences
+    end
+
+    if Enum.empty?(preferences) do
+      ""
+    else
+      "CANDIDATE PREFERENCES:\n" <> Enum.join(preferences, "\n")
+    end
+  end
+
+  defp parse_target_list(nil), do: []
+  defp parse_target_list(""), do: []
+  defp parse_target_list(str) when is_binary(str) do
+    str
+    |> String.split("\n")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+  defp parse_target_list(_), do: []
 
   defp build_experience_summary(resume) do
     roles = resume["roles"] || []
