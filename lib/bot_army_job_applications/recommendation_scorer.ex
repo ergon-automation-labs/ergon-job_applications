@@ -39,8 +39,8 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     # Salary alignment bonus (reuse Ranking logic pattern)
     salary_bonus = salary_alignment_bonus(listing["salary_range"], resume)
 
-    # Location bonus (remote jobs always match, others neutral for now)
-    location_bonus = location_bonus(listing["location"])
+    # Location bonus (compare job location against resume preferences)
+    location_bonus = location_bonus(listing["location"], resume)
 
     # Blend: 70% Jaccard, 15% salary, 15% location
     (jaccard * 0.70 + salary_bonus * 0.15 + location_bonus * 0.15)
@@ -237,7 +237,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     salary_floor = identity["salary_floor"]
 
     # If no floor set, neutral (0.5)
-    if not salary_floor or not is_integer(salary_floor) or salary_floor <= 0 do
+    if !salary_floor or !is_integer(salary_floor) or salary_floor <= 0 do
       0.5
     else
       # Get job's salary max (or min if max unavailable)
@@ -272,20 +272,59 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   defp salary_alignment_bonus(_, _), do: 0.5
 
-  defp location_bonus(location) when is_map(location) do
-    # Remote or hybrid jobs always match (no geographic constraint)
-    location_name = location["name"] || ""
-    location_kind = location["kind"] || ""
-
-    cond do
-      String.downcase(location_kind) in ["remote", "hybrid"] -> 1.0
-      String.downcase(location_name) =~ ~r/(remote|work from home)/i -> 1.0
-      is_binary(location_name) and location_name != "" -> 0.5  # Specific location, neutral for now
-      true -> 0.5  # Unknown location, neutral
+  defp parse_location_preferences(resume) when is_map(resume) do
+    prefs = get_in(resume, ["identity", "location_preferences"]) || ""
+    if is_binary(prefs) and prefs != "" do
+      prefs
+      |> String.split("\n")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.map(&String.downcase/1)
+    else
+      []
     end
   end
 
-  defp location_bonus(_), do: 0.5
+  defp parse_location_preferences(_), do: []
+
+  defp location_bonus(location, resume) when is_map(location) and is_map(resume) do
+    location_name = String.downcase(location["name"] || "")
+    location_kind = String.downcase(location["kind"] || "")
+    pref_list = parse_location_preferences(resume)
+
+    # Remote or hybrid jobs always match (no geographic constraint)
+    is_remote_job =
+      location_kind in ["remote", "hybrid"] or
+      Regex.match?(~r/(remote|work from home)/i, location_name)
+
+    if is_remote_job do
+      1.0
+    else
+      if Enum.empty?(pref_list) do
+        # No preferences set, neutral
+        0.5
+      else
+        # Check if user wants remote
+        user_wants_remote = Enum.any?(pref_list, &(&1 == "remote"))
+
+        # Check if job city is in preferences (partial match)
+        job_city_in_prefs =
+          location_name != "" and
+          Enum.any?(pref_list, fn pref ->
+            String.contains?(location_name, pref) or String.contains?(pref, location_name)
+          end)
+
+        cond do
+          user_wants_remote and job_city_in_prefs -> 0.8
+          user_wants_remote                       -> 0.2
+          job_city_in_prefs                       -> 1.0
+          true                                    -> 0.3
+        end
+      end
+    end
+  end
+
+  defp location_bonus(_, _), do: 0.5
 
   defp build_resume_summary(resume) do
     identity = resume["identity"] || %{}

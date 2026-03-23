@@ -180,6 +180,149 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
     end
   end
 
+  describe "location_bonus via tag_overlap_score/2" do
+    test "remote jobs score 1.0 location bonus regardless of preferences" do
+      resume = %{
+        "identity" => %{"name" => "Candidate"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"kind" => "remote"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      # 0.0*0.70 + 0.5*0.15 + 1.0*0.15 = 0.225
+      assert_in_delta score, 0.225, 0.001
+    end
+    test "hybrid jobs score 1.0 location bonus" do
+      resume = %{
+        "identity" => %{"name" => "Candidate"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"kind" => "hybrid"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      assert_in_delta score, 0.225, 0.001
+    end
+
+    test "job city matching user preference scores 1.0 location bonus" do
+      resume = %{
+        "identity" => %{"name" => "Candidate", "location_preferences" => "Austin, TX\nNew York"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"name" => "Austin, TX", "kind" => "onsite"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      # 0.0*0.70 + 0.5*0.15 + 1.0*0.15 = 0.225
+      assert_in_delta score, 0.225, 0.001
+    end
+
+    test "job city NOT in preferences scores 0.3 location bonus" do
+      resume = %{
+        "identity" => %{"name" => "Candidate", "location_preferences" => "Austin, TX\nNew York"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"name" => "Denver, CO", "kind" => "onsite"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      # 0.0*0.70 + 0.5*0.15 + 0.3*0.15 = 0.12
+      assert_in_delta score, 0.12, 0.001
+    end
+
+    test "remote preference + city in preferences scores 0.8" do
+      resume = %{
+        "identity" => %{"name" => "Candidate", "location_preferences" => "Remote\nAustin, TX"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"name" => "Austin, TX", "kind" => "onsite"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      # 0.0*0.70 + 0.5*0.15 + 0.8*0.15 = 0.195
+      assert_in_delta score, 0.195, 0.001
+    end
+
+    test "remote preference + city NOT in preferences scores 0.2" do
+      resume = %{
+        "identity" => %{"name" => "Candidate", "location_preferences" => "Remote\nAustin, TX"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"name" => "Denver, CO", "kind" => "onsite"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      # 0.0*0.70 + 0.5*0.15 + 0.2*0.15 = 0.105
+      assert_in_delta score, 0.105, 0.001
+    end
+
+    test "no location preferences set scores 0.5 location bonus" do
+      resume = %{
+        "identity" => %{"name" => "Candidate"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"name" => "Any City", "kind" => "onsite"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      # 0.0*0.70 + 0.5*0.15 + 0.5*0.15 = 0.15
+      assert score == 0.15
+    end
+
+    test "location matching is case insensitive" do
+      resume = %{
+        "identity" => %{"name" => "Candidate", "location_preferences" => "AUSTIN, TX\nNEW YORK"},
+        "skills" => [],
+        "roles" => []
+      }
+      listing = %{
+        "jd_tags" => %{},
+        "jd_text" => "",
+        "salary_range" => %{},
+        "location" => %{"name" => "austin, tx"}
+      }
+
+      score = RecommendationScorer.tag_overlap_score(listing, resume)
+      assert_in_delta score, 0.225, 0.001
+    end
+  end
+
   describe "parse_llm_score_response/1" do
     test "extracts score from JSON in markdown code block" do
       response = """

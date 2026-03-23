@@ -464,6 +464,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, payload} when is_map(payload) ->
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_update(payload)
+
+          # If update succeeded, re-score all listings with new preferences
+          if result["ok"] == true do
+            BotArmyJobApplications.Handlers.RecommendationHandler.rescore_all()
+          end
+
           Jason.encode!(result)
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "invalid_json"})

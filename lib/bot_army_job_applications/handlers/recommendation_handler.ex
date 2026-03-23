@@ -178,6 +178,39 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
   def score_listing_async(_), do: :ok
 
+  @doc """
+  Re-score all listings using the most recently updated resume.
+
+  Called after resume.update to apply new location preferences or salary floor.
+  Uses Task.start to run asynchronously without blocking the caller.
+  """
+  def rescore_all do
+    Task.start(fn ->
+      Logger.info("rescore_all: triggered by resume update")
+
+      case resume_store().list() do
+        {:ok, [resume | _]} ->
+          case listing_store().list([]) do
+            {:ok, listings} ->
+              Logger.info("rescore_all: re-scoring #{length(listings)} listings with updated resume")
+              scored_pairs = RecommendationScorer.shortlist(listings, resume, 20)
+              fire_async_llm_requests(scored_pairs, resume)
+
+            {:error, reason} ->
+              Logger.error("rescore_all: failed to fetch listings: #{inspect(reason)}")
+          end
+
+        {:ok, []} ->
+          Logger.warning("rescore_all: no resumes found, skipping")
+
+        {:error, reason} ->
+          Logger.error("rescore_all: failed to fetch resume: #{inspect(reason)}")
+      end
+    end)
+
+    :ok
+  end
+
   # Private helpers
 
   defp validate_recommend_payload(payload) when is_map(payload) do
