@@ -20,7 +20,7 @@ defmodule BotArmyJobApplications.Schemas.Application do
     field :salary_range, :map
     field :strategy, :string
     field :state, :string
-    field :history, :map
+    field :history, {:array, :map}
     field :pending_signal, :map
     field :next_action, :string
     field :artifacts, :map

@@ -14,7 +14,7 @@ defmodule BotArmyJobApplications.Repo.Migrations.CreateApplications do
       add :salary_range, :map
       add :strategy, :string
       add :state, :string, null: false
-      add :history, :map
+      add :history, {:array, :map}, default: []
       add :pending_signal, :map
       add :next_action, :string
       add :artifacts, :map
