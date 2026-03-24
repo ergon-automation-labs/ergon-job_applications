@@ -119,6 +119,72 @@ Portable users run migrations from `migrations/portable/` automatically in Relea
 
 ---
 
+## Database Configuration
+
+The bot connects to **postgres-vector** on Kubernetes NodePort **30003**. Configuration is centralized and automatic — Salt/launchd set all required environment variables.
+
+**Details**:
+
+### 1. Salt Pillar (bot_army_infra)
+
+Set in `pillar/common.sls` for all bots:
+```yaml
+deployment:
+  database:
+    host: localhost
+    port: 30003        # postgres-vector NodePort
+    user: postgres
+```
+
+### 2. Runtime Environment
+
+Bot reads at startup from (in order):
+1. `BOT_ARMY_JOB_APPLICATIONS_DB_NAME` environment variable (bot-specific override)
+2. `DATABASE_NAME` environment variable (common)
+3. Fallback default: `"ergon_job_applications"`
+
+**Set by Salt/launchd** in `/etc/bot_army/job_applications.env`:
+```bash
+DATABASE_HOST=localhost
+DATABASE_PORT=30003
+DATABASE_USER=postgres
+DATABASE_PASSWORD=postgres        # From air-secrets.sls
+DATABASE_NAME=ergon_job_applications
+```
+
+**Configured in** `config/runtime.exs` (priority: bot-specific > common > default):
+```elixir
+config :bot_army_job_applications, BotArmyJobApplications.Repo,
+  database: System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_NAME") ||
+            System.get_env("DATABASE_NAME") ||
+            "ergon_job_applications",
+  hostname: System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_HOST") ||
+            System.get_env("DATABASE_HOST") ||
+            "localhost",
+  port: String.to_integer(System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_PORT") ||
+            System.get_env("DATABASE_PORT") ||
+            "30003"),
+```
+
+### Database Schema
+
+The bot uses Ecto migrations (portable + personal):
+- **Portable migrations** (`priv/repo/migrations/portable/`): Schema-only, synced to public mirror
+- **Personal migrations** (`priv/repo/migrations/`): Full set for private deployment
+
+**Tables**:
+- `resumes` — Resume identity, roles, skills
+- `resume_roles` — Work history
+- `resume_bullets` — Achievement bullets
+- `resume_skills` — Technical skills
+- `job_listings` — Job board listings
+- `job_applications` — Application state machine
+- `email_signals` — Email-detected interview signals
+
+See `priv/repo/migrations/README.md` for migration strategy.
+
+---
+
 ## Core Dependencies
 
 - **bot_army_core** — NATS envelope decoding, schema validation, common patterns
