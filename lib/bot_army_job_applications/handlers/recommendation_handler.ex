@@ -124,7 +124,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     resume_id = source_metadata["resume_id"]
     payload = message["payload"] || %{}
 
-    case RecommendationScorer.parse_llm_score_response(payload["text"] || "") do
+    case RecommendationScorer.parse_llm_score_response(payload["completion"] || "") do
       {:ok, score, reason} ->
         Logger.info("LLM scored listing #{listing_id} (resume: #{resume_id}): #{(score * 100) |> trunc()}%")
 

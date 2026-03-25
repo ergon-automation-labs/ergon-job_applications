@@ -72,7 +72,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     payload = message["payload"] || %{}
-    prep_text = payload["text"] || ""
+    prep_text = payload["completion"] || ""
 
     case application_store().get(application_id) do
       {:ok, application} ->

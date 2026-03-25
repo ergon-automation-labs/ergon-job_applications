@@ -60,8 +60,8 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     application_id = source_metadata["application_id"]
     payload = message["payload"]
 
-    # Extract JSON from LLM response text
-    case extract_json_field(payload["text"], "tags") do
+    # Extract JSON from LLM response completion
+    case extract_json_field(payload["completion"], "tags") do
       {:ok, jd_tags} ->
         case BotArmyJobApplications.ApplicationServer.get(application_id) do
           {:ok, application} ->
@@ -105,8 +105,8 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     application_id = source_metadata["application_id"]
     payload = message["payload"]
 
-    # LLM returns the cover letter text directly
-    cover_letter_md = payload["text"] || ""
+    # LLM returns the cover letter text in completion field
+    cover_letter_md = payload["completion"] || ""
 
     case BotArmyJobApplications.ApplicationServer.get(application_id) do
       {:ok, application} ->

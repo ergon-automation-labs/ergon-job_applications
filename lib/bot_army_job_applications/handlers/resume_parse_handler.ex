@@ -56,10 +56,10 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
       file_path = source_metadata["file_path"]
       original_filename = source_metadata["original_filename"]
 
-      case extract_json_field(payload["text"], "identity") do
+      case extract_json_field(payload["completion"], "identity") do
         {:ok, identity} ->
           # Validate we have required fields
-          case validate_parsed_resume(identity, payload["text"]) do
+          case validate_parsed_resume(identity, payload["completion"]) do
             {:ok, parsed_data} ->
               persist_resume(parsed_data, file_path, original_filename)
 
