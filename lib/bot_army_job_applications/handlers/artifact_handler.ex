@@ -448,12 +448,26 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   defp fill_contact_placeholders(cover_letter, resume) when is_binary(cover_letter) and is_map(resume) do
     identity = resume["identity"] || %{}
     name = identity["name"] || "[Your Name]"
+    email = identity["email"] || "[Your Email]"
+    phone = identity["phone"] || "[Your Phone]"
+    linkedin = identity["linkedin"] || "[Your LinkedIn / Portfolio]"
 
-    # Replace common placeholder patterns
+    # Build contact signature line
+    contact_line = Enum.reject([
+      if(email != "[Your Email]", do: email),
+      if(phone != "[Your Phone]", do: phone),
+      if(linkedin != "[Your LinkedIn / Portfolio]", do: linkedin)
+    ], &is_nil/1) |> Enum.join(" | ")
+
     cover_letter
     |> String.replace("[Your Name]", name)
     |> String.replace("*[Your Name]*", "*#{name}*")
     |> String.replace("[your name]", name)
+    |> String.replace("[Your Email]", email)
+    |> String.replace("[Your Phone]", phone)
+    |> String.replace("[Your LinkedIn / Portfolio]", linkedin)
+    |> String.replace("[Your LinkedIn / Portfolio URL]", linkedin)
+    |> String.replace("[Your Email] | [Your Phone] | [Your LinkedIn / Portfolio]", contact_line)
   end
 
   defp fill_contact_placeholders(cover_letter, _resume) do

@@ -105,6 +105,9 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     {
       "identity": {
         "name": "Full Name",
+        "email": "email@example.com or null if not found",
+        "phone": "Phone number or null if not found",
+        "linkedin": "LinkedIn URL or null if not found",
         "summary": "Professional summary or objective",
         "summary_variants": ["Alternative summary 1", "Alternative summary 2"]
       },
