@@ -65,8 +65,10 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       {:ok, jd_tags} ->
         case BotArmyJobApplications.ApplicationServer.get(application_id) do
           {:ok, application} ->
-            case resume_store().get(application["resume_id"]) do
-              {:ok, resume} ->
+            resume_id = application["resume_id"]
+            if resume_id do
+              case resume_store().get(resume_id) do
+                {:ok, resume} ->
                 # Compose resume for this JD
                 composed = BotArmyJobApplications.ResumeComposer.compose(resume, jd_tags)
 
@@ -79,11 +81,14 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
                   }
                 )
 
-                # Initiate cover letter generation
-                initiate_cover_letter_generation(application, composed, jd_tags, application_id)
+                  # Initiate cover letter generation
+                  initiate_cover_letter_generation(application, composed, jd_tags, application_id)
 
-              {:error, :not_found} ->
-                Logger.error("Resume not found during JD analysis")
+                {:error, :not_found} ->
+                  Logger.error("Resume not found during JD analysis")
+              end
+            else
+              Logger.error("Application has no resume_id during JD analysis: #{application_id}")
             end
 
           {:error, :not_found} ->
