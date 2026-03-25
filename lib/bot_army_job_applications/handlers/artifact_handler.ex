@@ -58,41 +58,41 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   def handle_jd_analysis_response(message) do
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
+    resume_id = source_metadata["resume_id"]
     payload = message["payload"]
 
     # Extract JSON from LLM response completion
     case extract_json_field(payload["completion"], "tags") do
       {:ok, jd_tags} ->
-        case BotArmyJobApplications.ApplicationServer.get(application_id) do
-          {:ok, application} ->
-            resume_id = application["resume_id"]
-            if resume_id do
+        if resume_id do
+          case BotArmyJobApplications.ApplicationServer.get(application_id) do
+            {:ok, application} ->
               case resume_store().get(resume_id) do
                 {:ok, resume} ->
-                # Compose resume for this JD
-                composed = BotArmyJobApplications.ResumeComposer.compose(resume, jd_tags)
+                  # Compose resume for this JD
+                  composed = BotArmyJobApplications.ResumeComposer.compose(resume, jd_tags)
 
-                # Update application with JD tags and coverage score
-                BotArmyJobApplications.ApplicationServer.set_artifacts(
-                  application_id,
-                  %{
-                    "jd_tags" => jd_tags,
-                    "coverage_score" => composed["coverage_score"]
-                  }
-                )
+                  # Update application with JD tags and coverage score
+                  BotArmyJobApplications.ApplicationServer.set_artifacts(
+                    application_id,
+                    %{
+                      "jd_tags" => jd_tags,
+                      "coverage_score" => composed["coverage_score"]
+                    }
+                  )
 
                   # Initiate cover letter generation
-                  initiate_cover_letter_generation(application, composed, jd_tags, application_id)
+                  initiate_cover_letter_generation(application, composed, jd_tags, application_id, resume_id)
 
                 {:error, :not_found} ->
                   Logger.error("Resume not found during JD analysis")
               end
-            else
-              Logger.error("Application has no resume_id during JD analysis: #{application_id}")
-            end
 
-          {:error, :not_found} ->
-            Logger.error("Application not found during JD analysis: #{application_id}")
+            {:error, :not_found} ->
+              Logger.error("Application not found during JD analysis: #{application_id}")
+          end
+        else
+          Logger.error("No resume_id in source_metadata during JD analysis: #{application_id}")
         end
 
       {:error, reason} ->
@@ -163,8 +163,9 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     end
   end
 
-  defp initiate_jd_analysis(application, _resume, event_id) do
+  defp initiate_jd_analysis(application, resume, event_id) do
     jd_text = application["jd_text"] || ""
+    resume_id = resume["id"]
 
     # Build JD analysis prompt for LLM
     prompt = """
@@ -183,10 +184,11 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       "prompt_id" => "jd_analysis_#{application["id"]}"
     }
 
-    case BotArmyJobApplications.NATS.Publisher.publish_llm_request(
+    case BotArmyJobApplications.NATS.Publisher.publish_llm_request_with_metadata(
       llm_payload,
       "jd_analysis",
-      application["id"]
+      application["id"],
+      %{"resume_id" => resume_id}
     ) do
       :ok ->
         Logger.info("Initiated JD analysis for application: #{application["id"]}")
@@ -202,7 +204,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     end
   end
 
-  defp initiate_cover_letter_generation(application, composed, jd_tags, application_id) do
+  defp initiate_cover_letter_generation(application, composed, jd_tags, application_id, resume_id) do
     # Prepare context for cover letter generation
     selected_bullets = composed["roles"]
     |> Enum.flat_map(fn role -> role["bullets"] end)
@@ -243,10 +245,11 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       "prompt_id" => "cover_letter_#{application_id}"
     }
 
-    case BotArmyJobApplications.NATS.Publisher.publish_llm_request(
+    case BotArmyJobApplications.NATS.Publisher.publish_llm_request_with_metadata(
       llm_payload,
       "cover_letter",
-      application_id
+      application_id,
+      %{"resume_id" => resume_id}
     ) do
       :ok ->
         Logger.info("Initiated cover letter generation for application: #{application_id}")
