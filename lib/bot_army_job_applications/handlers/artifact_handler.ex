@@ -120,6 +120,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   def handle_cover_letter_response(message) do
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
+    resume_id = source_metadata["resume_id"]
     payload = message["payload"]
 
     # LLM returns the cover letter text in completion field
@@ -130,9 +131,22 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
         # Get the composed resume from artifacts
         artifacts = application["artifacts"] || %{}
 
+        # Post-process cover letter to fill in contact info from resume
+        processed_cover_letter =
+          if resume_id do
+            case resume_store().get(resume_id) do
+              {:ok, resume} ->
+                fill_contact_placeholders(cover_letter_md, resume)
+              {:error, _} ->
+                cover_letter_md
+            end
+          else
+            cover_letter_md
+          end
+
         # Update artifacts with cover letter
         final_artifacts = Map.merge(artifacts, %{
-          "cover_letter_md" => cover_letter_md,
+          "cover_letter_md" => processed_cover_letter,
           "composed_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601()
         })
 
@@ -429,5 +443,20 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       "created_at" => app.inserted_at |> NaiveDateTime.to_iso8601(),
       "updated_at" => app.updated_at |> NaiveDateTime.to_iso8601()
     }
+  end
+
+  defp fill_contact_placeholders(cover_letter, resume) when is_binary(cover_letter) and is_map(resume) do
+    identity = resume["identity"] || %{}
+    name = identity["name"] || "[Your Name]"
+
+    # Replace common placeholder patterns
+    cover_letter
+    |> String.replace("[Your Name]", name)
+    |> String.replace("*[Your Name]*", "*#{name}*")
+    |> String.replace("[your name]", name)
+  end
+
+  defp fill_contact_placeholders(cover_letter, _resume) do
+    cover_letter
   end
 end
