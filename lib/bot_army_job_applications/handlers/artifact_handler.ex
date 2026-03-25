@@ -123,7 +123,10 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
           {:ok, updated_app} ->
             Logger.info("Artifacts complete for application: #{application_id}")
 
-            # Publish artifact result
+            # Publish cover letter result (arrives after LLM)
+            publish_cover_letter_result(updated_app, cover_letter_md)
+
+            # Also publish combined artifact result for backwards compatibility
             publish_artifact_result(updated_app)
 
           {:error, reason} ->
@@ -243,12 +246,16 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       :ok ->
         Logger.info("Initiated cover letter generation for application: #{application_id}")
         # Store the composed resume for later use
+        resume_md = format_resume_bullets(composed["roles"], composed["summary"])
         BotArmyJobApplications.ApplicationServer.set_artifacts(
           application_id,
           %{
-            "resume_md" => format_resume_bullets(composed["roles"], composed["summary"])
+            "resume_md" => resume_md
           }
         )
+
+        # Publish resume variant immediately (no LLM wait)
+        publish_resume_variant_result(application, resume_md, composed["coverage_score"])
 
       {:error, reason} ->
         Logger.error("Failed to publish cover letter request: #{inspect(reason)}")
@@ -300,6 +307,47 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
         "cover_letter_md" => artifacts["cover_letter_md"],
         "resume_md" => artifacts["resume_md"],
         "coverage_score" => coverage
+      }
+    }
+
+    BotArmyJobApplications.NATS.Publisher.publish(event)
+  end
+
+  defp publish_resume_variant_result(application, resume_md, coverage_score) do
+    event = %{
+      "event" => "job.application.resume_variant.result",
+      "event_id" => UUID.uuid4() |> to_string(),
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_job_applications",
+      "source_node" => get_node_name(),
+      "triggered_by" => "job_applications.bot",
+      "schema_version" => "1.0",
+      "payload" => %{
+        "application_id" => application["id"],
+        "company" => application["company"],
+        "role_title" => application["role_title"],
+        "resume_md" => resume_md,
+        "coverage_score" => coverage_score
+      }
+    }
+
+    BotArmyJobApplications.NATS.Publisher.publish(event)
+  end
+
+  defp publish_cover_letter_result(application, cover_letter_md) do
+    event = %{
+      "event" => "job.application.cover_letter.result",
+      "event_id" => UUID.uuid4() |> to_string(),
+      "timestamp" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "source" => "bot_army_job_applications",
+      "source_node" => get_node_name(),
+      "triggered_by" => "job_applications.bot",
+      "schema_version" => "1.0",
+      "payload" => %{
+        "application_id" => application["id"],
+        "company" => application["company"],
+        "role_title" => application["role_title"],
+        "cover_letter_md" => cover_letter_md
       }
     }
 
