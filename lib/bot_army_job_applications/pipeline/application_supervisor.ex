@@ -18,7 +18,14 @@ defmodule BotArmyJobApplications.ApplicationSupervisor do
   def init(_init_arg) do
     Logger.info("ApplicationSupervisor starting")
 
-    # Load all non-terminal applications from database
+    # Load all non-terminal applications from database with retries
+    # (Repo may not be fully initialized yet)
+    load_applications_with_retries(3)
+
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
+  defp load_applications_with_retries(retries_left) do
     try do
       terminal_states = BotArmyJobApplications.Commands.all_states()
       |> Enum.filter(&BotArmyJobApplications.Commands.terminal?/1)
@@ -36,10 +43,14 @@ defmodule BotArmyJobApplications.ApplicationSupervisor do
       Logger.info("Started #{length(applications)} ApplicationServers from database")
     rescue
       e ->
-        Logger.warning("Error loading applications from database on supervisor init: #{inspect(e)}")
+        if retries_left > 0 do
+          Logger.debug("Database not ready, retrying in 500ms (#{retries_left} retries left): #{inspect(e)}")
+          Process.sleep(500)
+          load_applications_with_retries(retries_left - 1)
+        else
+          Logger.warning("Error loading applications from database on supervisor init: #{inspect(e)}")
+        end
     end
-
-    DynamicSupervisor.init(strategy: :one_for_one)
   end
 
   @doc """
