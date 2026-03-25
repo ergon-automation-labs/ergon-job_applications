@@ -65,8 +65,20 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     case extract_json_field(payload["completion"], "tags") do
       {:ok, jd_tags} ->
         if resume_id do
-          case BotArmyJobApplications.ApplicationServer.get(application_id) do
-            {:ok, application} ->
+          # Try ApplicationServer first (fast, in-memory), fall back to database
+          application = case BotArmyJobApplications.ApplicationServer.get(application_id) do
+            {:ok, app} -> {:ok, app}
+            {:error, :not_found} ->
+              # Application process not in registry (e.g., after restart)
+              # Try loading from database directly
+              case BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_id) do
+                nil -> {:error, :not_found}
+                db_app -> {:ok, schema_to_map(db_app)}
+              end
+          end
+
+          case application do
+            {:ok, application_data} ->
               case resume_store().get(resume_id) do
                 {:ok, resume} ->
                   # Compose resume for this JD
@@ -82,7 +94,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
                   )
 
                   # Initiate cover letter generation
-                  initiate_cover_letter_generation(application, composed, jd_tags, application_id, resume_id)
+                  initiate_cover_letter_generation(application_data, composed, jd_tags, application_id, resume_id)
 
                 {:error, :not_found} ->
                   Logger.error("Resume not found during JD analysis")
@@ -395,5 +407,27 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
   defp extract_json_field(_, _) do
     {:error, :invalid_input}
+  end
+
+  defp schema_to_map(%BotArmyJobApplications.Schemas.Application{} = app) do
+    %{
+      "id" => app.id |> to_string(),
+      "listing_id" => app.listing_id,
+      "company" => app.company,
+      "role_title" => app.role_title,
+      "jd_url" => app.jd_url,
+      "jd_text" => app.jd_text,
+      "jd_tags" => app.jd_tags,
+      "coverage_score" => app.coverage_score,
+      "salary_range" => app.salary_range,
+      "strategy" => app.strategy,
+      "state" => app.state,
+      "history" => app.history,
+      "pending_signal" => app.pending_signal,
+      "next_action" => app.next_action,
+      "artifacts" => app.artifacts,
+      "created_at" => app.inserted_at |> NaiveDateTime.to_iso8601(),
+      "updated_at" => app.updated_at |> NaiveDateTime.to_iso8601()
+    }
   end
 end
