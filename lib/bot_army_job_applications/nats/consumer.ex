@@ -13,7 +13,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   - job.resume.create — create resume from TUI (request/reply)
   - job.resume.update — update resume from TUI (request/reply)
   - job.resume.delete — delete resume (request/reply)
-  - events.llm.completion — LLM responses (routed by source_metadata.source_domain)
+  - events.llm.completion.job_applications.* — typed LLM responses:
+      - cover_letter — artifact cover letter generation
+      - jd_analysis — artifact JD tag extraction
+      - scoring — job recommendation scoring
+      - resume_parse — resume file parsing
+      - interview_prep — interview prep generation
   - job.pipeline.query — request/reply queries
 
   Phase 1 (manual pipeline): Minimal subscriptions for artifact generation.
@@ -35,7 +40,6 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   """
   def route_message(message) do
     event = message["event"]
-    source_metadata = message["source_metadata"] || %{}
 
     case event do
       "job.application.create" ->
@@ -84,36 +88,23 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.resume.upload" ->
         BotArmyJobApplications.Handlers.ResumeParseHandler.handle_upload(message)
 
-      "llm.completion" ->
-        source_domain = source_metadata["source_domain"]
-        route_llm_response(source_domain, message)
-
-      _ ->
-        Logger.debug("Unknown event type: #{event}")
-    end
-  end
-
-  # Private helpers
-
-  defp route_llm_response(source_domain, message) do
-    case source_domain do
-      "jd_analysis" ->
-        BotArmyJobApplications.Handlers.ArtifactHandler.handle_jd_analysis_response(message)
-
-      "cover_letter" ->
+      "llm.completion.job_applications.cover_letter" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_cover_letter_response(message)
 
-      "resume_parse" ->
-        BotArmyJobApplications.Handlers.ResumeParseHandler.handle_parse_response(message)
+      "llm.completion.job_applications.jd_analysis" ->
+        BotArmyJobApplications.Handlers.ArtifactHandler.handle_jd_analysis_response(message)
 
-      "job_recommendation" ->
+      "llm.completion.job_applications.scoring" ->
         BotArmyJobApplications.Handlers.RecommendationHandler.handle_llm_score_response(message)
 
-      "interview_prep" ->
+      "llm.completion.job_applications.resume_parse" ->
+        BotArmyJobApplications.Handlers.ResumeParseHandler.handle_parse_response(message)
+
+      "llm.completion.job_applications.interview_prep" ->
         BotArmyJobApplications.Handlers.InterviewPrepHandler.handle_llm_response(message)
 
       _ ->
-        Logger.debug("Unknown LLM response source_domain: #{source_domain}")
+        Logger.debug("Unknown event type: #{event}")
     end
   end
 
@@ -161,7 +152,11 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.resume.create",
             "job.resume.update",
             "job.resume.delete",
-            "events.llm.completion",
+            "events.llm.completion.job_applications.cover_letter",
+            "events.llm.completion.job_applications.jd_analysis",
+            "events.llm.completion.job_applications.scoring",
+            "events.llm.completion.job_applications.resume_parse",
+            "events.llm.completion.job_applications.interview_prep",
             "job.pipeline.query",
             "job.application.get",
             "job.application.list",

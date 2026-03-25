@@ -322,6 +322,16 @@ identified → drafting → ready_to_submit → submitted → phone_screen → t
 - `job.application.create` — intent to apply (opens ApplicationServer)
 - `job.application.command.transition` — user-initiated state change
 - `job.application.artifact.request` — request cover letter or resume variant
+- **Typed LLM completion subjects:**
+  - `events.llm.completion.job_applications.jd_analysis` → ArtifactHandler (extract JD tags)
+  - `events.llm.completion.job_applications.cover_letter` → ArtifactHandler (generate cover letter)
+
+**Pattern:**
+```
+events.llm.completion.{bot_name}.{request_type}
+```
+- `bot_name`: envelope `source` with `"bot_army_"` prefix stripped
+- `request_type`: `source_metadata["source_domain"]` from the request
 
 **Publishes:**
 - `job.application.created` — application entered pipeline
