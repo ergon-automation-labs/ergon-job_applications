@@ -264,6 +264,14 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     Resume Summary: #{composed["summary"]}
 
     Write a compelling cover letter in markdown format. Return only the markdown content, no code blocks.
+
+    IMPORTANT: End with this exact signature format:
+    ---
+
+    Sincerely,
+
+    *[Your Name]*
+    [Your Email] | [Your Phone] | [Your LinkedIn / Portfolio]
     """
 
     llm_payload = %{
@@ -452,14 +460,14 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     phone = identity["phone"] || "[Your Phone]"
     linkedin = identity["linkedin"] || "[Your LinkedIn / Portfolio]"
 
-    # Build contact signature line
+    # Build contact signature line (only include fields that have actual values)
     contact_line = Enum.reject([
       if(email != "[Your Email]", do: email),
       if(phone != "[Your Phone]", do: phone),
       if(linkedin != "[Your LinkedIn / Portfolio]", do: linkedin)
     ], &is_nil/1) |> Enum.join(" | ")
 
-    cover_letter
+    letter = cover_letter
     |> String.replace("[Your Name]", name)
     |> String.replace("*[Your Name]*", "*#{name}*")
     |> String.replace("[your name]", name)
@@ -468,9 +476,24 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     |> String.replace("[Your LinkedIn / Portfolio]", linkedin)
     |> String.replace("[Your LinkedIn / Portfolio URL]", linkedin)
     |> String.replace("[Your Email] | [Your Phone] | [Your LinkedIn / Portfolio]", contact_line)
+
+    # Standardize signature format
+    standardize_signature(letter, name, contact_line)
   end
 
   defp fill_contact_placeholders(cover_letter, _resume) do
     cover_letter
+  end
+
+  defp standardize_signature(cover_letter, name, contact_line) do
+    # Remove any existing signature variations and replace with standard format
+    letter_without_old_sig = cover_letter
+    |> String.replace(~r/---?\s*\n\s*(?:Best regards|Sincerely|Thanks|Warm regards)[^\n]*\n[^\n]*\n?/i, "")
+    |> String.replace(~r/\n\s*(?:Best regards|Sincerely|Thanks|Warm regards|Respectfully)[^\n]*\n/i, "\n")
+
+    # Ensure standard signature at end
+    letter_without_old_sig
+    |> String.trim_trailing()
+    |> Kernel.<>("\n\n---\n\nSincerely,\n\n*#{name}*\n#{contact_line}")
   end
 end
