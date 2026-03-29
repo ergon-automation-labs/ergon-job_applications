@@ -242,15 +242,20 @@ scan-listings:
 	@echo "Check logs: tail -50 /var/log/bot_army/job_applications.log"
 	@echo ""
 
+list-listings:
+	@echo "==============================================="
+	@echo "Fetching discovered listings from bot"
+	@echo "==============================================="
+	@echo ""
+	nats request --server nats://localhost:4222 job.listings.list '{}' --timeout 5s | jq '.listings | length as $$count | "Found \($$count) listings:" , (.[] | "\(.company) — \(.role_title)")'
+	@echo ""
+
 scan: discover-boards scan-listings
 	@echo "==============================================="
 	@echo "✓ Job discovery and scan requests submitted"
 	@echo "==============================================="
 	@echo ""
-	@echo "Boards discovered:"
-	@discover-boards
-	@echo ""
 	@echo "Next steps:"
 	@echo "  Monitor scan progress: tail -f /var/log/bot_army/job_applications.log"
-	@echo "  View discovered listings in LiveView: http://localhost:30004"
+	@echo "  View discovered listings: make list-listings"
 	@echo ""
