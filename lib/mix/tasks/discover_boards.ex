@@ -15,59 +15,18 @@ defmodule Mix.Tasks.JobApplications.DiscoverBoards do
   require Logger
 
   @default_timeout_ms 5000
-
-  # Curated companies by category
-  @companies %{
-    "ai" => [
-      {"Anthropic", "anthropic", "greenhouse"},
-      {"Hugging Face", "huggingface", "greenhouse"},
-      {"Scale AI", "scale", "greenhouse"},
-      {"Together AI", "togetherai", "greenhouse"},
-      {"Replicate", "replicate", "greenhouse"},
-      {"CoreWeave", "coreweave", "greenhouse"},
-      {"Lightning AI", "lightning", "greenhouse"},
-      {"Mistral AI", "mistral", "greenhouse"},
-      {"Weights & Biases", "weightsandbiases", "greenhouse"},
-    ],
-    "devtools" => [
-      {"Cursor", "cursor", "greenhouse"},
-      {"Replit", "replit", "greenhouse"},
-      {"JetBrains", "jetbrains", "lever"},
-      {"Vercel", "vercel", "greenhouse"},
-      {"Netlify", "netlify", "greenhouse"},
-      {"Astro", "astro", "greenhouse"},
-      {"Prisma", "prisma", "greenhouse"},
-      {"Svelte", "svelte", "greenhouse"},
-      {"Figma", "figma", "greenhouse"},
-      {"Linear", "linear", "greenhouse"},
-      {"Stripe", "stripe", "lever"},
-      {"Twilio", "twilio", "greenhouse"},
-      {"Auth0", "auth0", "greenhouse"},
-      {"Segment", "segment", "greenhouse"},
-    ],
-    "infra" => [
-      {"Cloudflare", "cloudflare", "greenhouse"},
-      {"HashiCorp", "hashicorp", "lever"},
-      {"Fly.io", "fly", "greenhouse"},
-      {"Mux", "mux", "greenhouse"},
-      {"Supabase", "supabase", "greenhouse"},
-      {"PlanetScale", "planetscale", "greenhouse"},
-      {"Railway", "railway", "greenhouse"},
-      {"Wiz", "wiz", "greenhouse"},
-      {"DigitalOcean", "digitalocean", "greenhouse"},
-      {"Kong", "kong", "greenhouse"},
-      {"Datadog", "datadog", "greenhouse"},
-      {"Lacework", "lacework", "greenhouse"},
-    ]
-  }
+  @companies_file "companies.yaml"
 
   @impl true
   def run(args) do
     {opts, _} = OptionParser.parse!(args, switches: [categories: :string, output: :string])
 
+    # Load companies from YAML file
+    companies_data = load_companies_from_file()
+
     categories =
       case Keyword.get(opts, :categories) do
-        nil -> Map.keys(@companies)
+        nil -> Map.keys(companies_data)
         cats -> String.split(cats, ",") |> Enum.map(&String.trim/1)
       end
 
@@ -77,7 +36,7 @@ defmodule Mix.Tasks.JobApplications.DiscoverBoards do
 
     companies =
       categories
-      |> Enum.flat_map(fn cat -> @companies[cat] || [] end)
+      |> Enum.flat_map(fn cat -> companies_data[cat] || [] end)
 
     results = discover_boards(companies)
 
@@ -230,5 +189,144 @@ defmodule Mix.Tasks.JobApplications.DiscoverBoards do
         "company_name" => "#{board["company_name"]}"
       }
     """
+  end
+
+  defp load_companies_from_file do
+    # Find the companies.yaml file in the project root
+    project_root = File.cwd!()
+    file_path = Path.join(project_root, @companies_file)
+
+    case File.read(file_path) do
+      {:ok, content} ->
+        Mix.shell().info("📄 Loaded companies from #{file_path}")
+        parse_companies_yaml(content)
+      {:error, reason} ->
+        Mix.shell().error("⚠️  Could not read #{file_path}: #{inspect(reason)}")
+        Mix.shell().info("Using default companies config...")
+        default_companies()
+    end
+  end
+
+  defp parse_companies_yaml(content) do
+    content
+    |> String.split("\n")
+    |> Enum.reduce({%{}, nil}, fn line, {acc, current_category} ->
+      line = String.trim(line)
+      cond do
+        # Skip empty lines and comments
+        line == "" or String.starts_with?(line, "#") ->
+          {acc, current_category}
+
+        # Category line: "category_name:"
+        String.ends_with?(line, ":") and not String.starts_with?(line, " ") ->
+          category = String.trim_trailing(line, ":")
+          {Map.put(acc, category, []), category}
+
+        # Company line: "  CompanyName: {slug: xxx, platform: yyy}"
+        String.starts_with?(line, "  ") and current_category ->
+          case parse_company_line(line) do
+            {:ok, name, slug, platform} ->
+              updated_companies = acc[current_category] ++ [{name, slug, platform}]
+              {Map.put(acc, current_category, updated_companies), current_category}
+            :error ->
+              {acc, current_category}
+          end
+
+        true ->
+          {acc, current_category}
+      end
+    end)
+    |> elem(0)
+  end
+
+  defp parse_company_line(line) do
+    line = String.trim(line)
+    # Format: "CompanyName: {slug: value, platform: value}"
+    case String.split(line, ": {", parts: 2) do
+      [name, rest] ->
+        case String.trim_trailing(rest, "}") |> parse_company_config() do
+          {:ok, slug, platform} -> {:ok, name, slug, platform}
+          :error -> :error
+        end
+      _ -> :error
+    end
+  end
+
+  defp parse_company_config(config_str) do
+    # Parse "slug: value, platform: value"
+    parts = String.split(config_str, ", ")
+
+    slug_part =
+      parts
+      |> Enum.find("", fn p -> String.starts_with?(String.trim(p), "slug") end)
+      |> String.trim()
+
+    platform_part =
+      parts
+      |> Enum.find("", fn p -> String.starts_with?(String.trim(p), "platform") end)
+      |> String.trim()
+
+    slug = extract_config_value(slug_part)
+    platform = extract_config_value(platform_part)
+
+    if slug && platform do
+      {:ok, slug, platform}
+    else
+      :error
+    end
+  end
+
+  defp extract_config_value(config_part) do
+    case String.split(config_part, ": ", parts: 2) do
+      [_, value] -> String.trim(value)
+      _ -> nil
+    end
+  end
+
+  defp default_companies do
+    # Fallback hardcoded companies (same as before)
+    %{
+      "ai" => [
+        {"Anthropic", "anthropic", "greenhouse"},
+        {"Hugging Face", "huggingface", "greenhouse"},
+        {"Scale AI", "scale", "greenhouse"},
+        {"Together AI", "togetherai", "greenhouse"},
+        {"Replicate", "replicate", "greenhouse"},
+        {"CoreWeave", "coreweave", "greenhouse"},
+        {"Lightning AI", "lightning", "greenhouse"},
+        {"Mistral AI", "mistral", "greenhouse"},
+        {"Weights & Biases", "weightsandbiases", "greenhouse"},
+      ],
+      "devtools" => [
+        {"Cursor", "cursor", "greenhouse"},
+        {"Replit", "replit", "greenhouse"},
+        {"JetBrains", "jetbrains", "lever"},
+        {"Vercel", "vercel", "greenhouse"},
+        {"Netlify", "netlify", "greenhouse"},
+        {"Astro", "astro", "greenhouse"},
+        {"Prisma", "prisma", "greenhouse"},
+        {"Svelte", "svelte", "greenhouse"},
+        {"Figma", "figma", "greenhouse"},
+        {"Linear", "linear", "greenhouse"},
+        {"Stripe", "stripe", "lever"},
+        {"Twilio", "twilio", "greenhouse"},
+        {"Auth0", "auth0", "greenhouse"},
+        {"Segment", "segment", "greenhouse"},
+      ],
+      "infra" => [
+        {"Cloudflare", "cloudflare", "greenhouse"},
+        {"HashiCorp", "hashicorp", "lever"},
+        {"Fly.io", "fly", "greenhouse"},
+        {"Mux", "mux", "greenhouse"},
+        {"Supabase", "supabase", "greenhouse"},
+        {"PlanetScale", "planetscale", "greenhouse"},
+        {"Railway", "railway", "greenhouse"},
+        {"Wiz", "wiz", "greenhouse"},
+        {"DigitalOcean", "digitalocean", "greenhouse"},
+        {"Kong", "kong", "greenhouse"},
+        {"Datadog", "datadog", "greenhouse"},
+        {"Lacework", "lacework", "greenhouse"},
+      ]
+    }
   end
 end

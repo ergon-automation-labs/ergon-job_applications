@@ -1,0 +1,49 @@
+# Job board companies configuration
+# Format: company_name: {slug: "url-slug", platform: "greenhouse|lever"}
+#
+# Add/remove companies here without recompiling.
+# Then run: make discover-boards
+
+ai:
+  Anthropic: {slug: anthropic, platform: greenhouse}
+  Hugging Face: {slug: huggingface, platform: greenhouse}
+  Scale AI: {slug: scale, platform: greenhouse}
+  Together AI: {slug: togetherai, platform: greenhouse}
+  Replicate: {slug: replicate, platform: greenhouse}
+  CoreWeave: {slug: coreweave, platform: greenhouse}
+  Lightning AI: {slug: lightning, platform: greenhouse}
+  Mistral AI: {slug: mistral, platform: greenhouse}
+  Weights & Biases: {slug: weightsandbiases, platform: greenhouse}
+  # OpenAI: {slug: openai, platform: greenhouse}  # Uncomment to add
+
+devtools:
+  Cursor: {slug: cursor, platform: greenhouse}
+  Replit: {slug: replit, platform: greenhouse}
+  JetBrains: {slug: jetbrains, platform: lever}
+  Vercel: {slug: vercel, platform: greenhouse}
+  Netlify: {slug: netlify, platform: greenhouse}
+  Astro: {slug: astro, platform: greenhouse}
+  Prisma: {slug: prisma, platform: greenhouse}
+  Svelte: {slug: svelte, platform: greenhouse}
+  Figma: {slug: figma, platform: greenhouse}
+  Linear: {slug: linear, platform: greenhouse}
+  Stripe: {slug: stripe, platform: lever}
+  Twilio: {slug: twilio, platform: greenhouse}
+  Auth0: {slug: auth0, platform: greenhouse}
+  Segment: {slug: segment, platform: greenhouse}
+  # Add more here
+
+infra:
+  Cloudflare: {slug: cloudflare, platform: greenhouse}
+  HashiCorp: {slug: hashicorp, platform: lever}
+  Fly.io: {slug: fly, platform: greenhouse}
+  Mux: {slug: mux, platform: greenhouse}
+  Supabase: {slug: supabase, platform: greenhouse}
+  PlanetScale: {slug: planetscale, platform: greenhouse}
+  Railway: {slug: railway, platform: greenhouse}
+  Wiz: {slug: wiz, platform: greenhouse}
+  DigitalOcean: {slug: digitalocean, platform: greenhouse}
+  Kong: {slug: kong, platform: greenhouse}
+  Datadog: {slug: datadog, platform: greenhouse}
+  Lacework: {slug: lacework, platform: greenhouse}
+  # Add more here
