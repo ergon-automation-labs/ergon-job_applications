@@ -195,6 +195,10 @@ discover-boards:
 	@echo ""
 	mix job_applications.discover_boards
 	@echo ""
+	@echo "Next steps:"
+	@echo "  If boards were found, sync them to production:"
+	@echo "  make sync-boards"
+	@echo ""
 
 discover-boards-yaml:
 	@echo "==============================================="
@@ -204,6 +208,9 @@ discover-boards-yaml:
 	mix job_applications.discover_boards --output /tmp/ingestion_boards.yaml
 	@echo ""
 	@cat /tmp/ingestion_boards.yaml
+	@echo ""
+	@echo "To apply these boards to production:"
+	@echo "  make sync-boards"
 	@echo ""
 
 sync-boards:
