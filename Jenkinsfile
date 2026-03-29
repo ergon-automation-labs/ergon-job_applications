@@ -119,13 +119,9 @@ pipeline {
 
           # Discover boards and update pillar (Jenkins workspace + ergon_top scripts)
           echo "Discovering active job boards..."
-          timeout 120 bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
+          bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
             EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Board discovery timed out after 120s, continuing without sync"
-            else
-              echo "⚠️  Board sync failed (exit code: $EXIT_CODE), continuing"
-            fi
+            echo "⚠️  Board sync failed (exit code: $EXIT_CODE), using existing boards"
             exit 0
           }
 
@@ -174,68 +170,26 @@ pipeline {
           echo "Updating current symlink..."
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
-          # Deploy via Salt using fresh checkouts (gets updated pillar from Sync stage)
-          TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
-          ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
-          ERGON_TOP_URL="${ERGON_TOP_URL:-https://github.com/ergon-automation-labs/ergon_top_directory.git}"
-          ERGON_TOP_BRANCH="${ERGON_TOP_BRANCH:-main}"
-          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
-          INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
-          INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
+          # Deploy via Salt (skipping make deploy-bot due to SSH auth issues in Jenkins)
+          echo "Applying Salt configuration..."
+          salt_apply() {
+            local state=$1 attempt=0
+            until sudo /opt/salt/salt ${SALT_TARGET} state.apply $state; do
+              attempt=$((attempt + 1))
+              if [ $attempt -ge 3 ]; then echo "salt state.apply $state failed after 3 attempts"; return 1; fi
+              echo "Salt busy, retrying in 30s... (attempt $attempt/3)"
+              sleep 30
+            done
+          }
+          # Apply dependencies first, then bot state
+          salt_apply common.core
+          salt_apply common.schemas
+          salt_apply bots.${STATE_NAME}
 
-          # Fresh checkout of ergon_top (for scripts)
-          if git -C "${ERGON_TOP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-          else
-            rm -rf "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
-            git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
-          fi
-
-          # Fresh checkout of bot_army_infra (gets updated pillar from Sync stage)
-          if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-          else
-            rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
-            git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
-          fi
-
-          if [ -d "${INFRA_REPO_DIR}" ] && [ -f "${INFRA_REPO_DIR}/Makefile" ]; then
-            echo "Deploying service via Salt..."
-            cd "${INFRA_REPO_DIR}"
-            make deploy-bot BOT=${BOT_NAME} || {
-              echo "⚠️  make deploy-bot failed, attempting manual Salt apply"
-              cd "${WORKSPACE}/bot_army_job_applications"
-            }
-          else
-            echo "Fresh bot_army_infra checkout not available, using manual Salt apply..."
-            cd "${WORKSPACE}/bot_army_job_applications"
-          fi
-
-          # Fallback manual Salt apply if make deploy-bot not available
-          if [ ! -f "${RELEASE_DIR}/current/${RELEASE_NAME}/bin/${RELEASE_NAME}" ] || ! command -v make >/dev/null; then
-            echo "Applying Salt configuration manually..."
-            salt_apply() {
-              local state=$1 attempt=0
-              until sudo /opt/salt/salt ${SALT_TARGET} state.apply $state; do
-                attempt=$((attempt + 1))
-                if [ $attempt -ge 3 ]; then echo "salt state.apply $state failed after 3 attempts"; return 1; fi
-                echo "Salt busy, retrying in 30s... (attempt $attempt/3)"
-                sleep 30
-              done
-            }
-            salt_apply common.core
-            salt_apply common.schemas
-            salt_apply bots.${STATE_NAME}
-
-            echo "Restarting service..."
-            sudo launchctl unload /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist 2>/dev/null || true
-            sleep 2
-            sudo launchctl load -w /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist
-          fi
+          echo "Restarting service..."
+          sudo launchctl unload /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist 2>/dev/null || true
+          sleep 2
+          sudo launchctl load -w /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist
 
           echo "Checking service health..."
           /opt/bot_army/scripts/health_check.sh ${BOT_NAME}
