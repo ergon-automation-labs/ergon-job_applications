@@ -76,6 +76,12 @@ pipeline {
           echo "==============================================="
           echo "Syncing job boards to Salt pillar"
           echo "==============================================="
+          echo "NOTE: Board discovery task hangs - skipping for now"
+          echo "Using existing boards from pillar configuration"
+          exit 0
+
+          # TODO: Debug board discovery hanging (investigate :httpc timeout issue)
+          # Existing code below (disabled):
 
           TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
           ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
