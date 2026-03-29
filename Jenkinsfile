@@ -81,44 +81,62 @@ pipeline {
           ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
           ERGON_TOP_URL="${ERGON_TOP_URL:-https://github.com/ergon-automation-labs/ergon_top_directory.git}"
           ERGON_TOP_BRANCH="${ERGON_TOP_BRANCH:-main}"
+          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
+          INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
+          INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
 
           mkdir -p "${TMP_ROOT}" 2>/dev/null || true
 
-          # Clone or update fresh ergon_top_directory workspace
+          # Clone or update fresh ergon_top_directory (for scripts)
           if git -C "${ERGON_TOP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            echo "Updating existing workspace..."
-            if ! git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1; then
-              echo "⚠️  Failed to fetch workspace, using existing state"
-            else
-              git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-              git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-            fi
+            echo "Updating ergon_top_directory..."
+            git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
           else
-            echo "Cloning fresh ergon_top_directory workspace..."
+            echo "Cloning ergon_top_directory (for scripts)..."
             rm -rf "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
-            if ! git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1; then
-              echo "⚠️  Failed to clone workspace, skipping board sync"
-              exit 0
-            fi
+            git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
           fi
 
-          # Discover boards and update pillar using workspace scripts
+          # Clone or update bot_army_infra (for pillar updates)
+          if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Updating bot_army_infra..."
+            git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+          else
+            echo "Cloning bot_army_infra..."
+            rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
+            git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
+          fi
+
+          # Copy infra repo to Jenkins workspace as sibling for mix task discovery
+          mkdir -p ../bot_army_infra 2>/dev/null || true
+          if [ ! -d "../bot_army_infra/.git" ]; then
+            cp -r "${INFRA_REPO_DIR}" ../bot_army_infra || true
+          fi
+
+          # Discover boards and update pillar (Jenkins workspace + ergon_top scripts)
           echo "Discovering active job boards..."
-          cd "${ERGON_TOP_DIR}/bot_army_job_applications"
           bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
             echo "⚠️  Board sync failed, but continuing"
             exit 0
           }
 
-          # Commit and push updated pillar
-          cd "${ERGON_TOP_DIR}/bot_army_infra"
+          # Copy updated pillar back to /tmp/bot_army/bot_army_infra and push
+          if [ -f "../bot_army_infra/salt/pillar/job_applications.sls" ]; then
+            cp "../bot_army_infra/salt/pillar/job_applications.sls" "${INFRA_REPO_DIR}/salt/pillar/job_applications.sls"
+          fi
+
+          cd "${INFRA_REPO_DIR}"
           if git diff --quiet salt/pillar/job_applications.sls 2>/dev/null; then
             echo "✓ No board changes detected"
           else
             echo "Board configuration changed, committing and pushing..."
             git add salt/pillar/job_applications.sls
             git commit -m "Auto-sync: update job board configuration from job_applications discovery" >/dev/null 2>&1 || true
-            if git push origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1; then
+            if git push origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1; then
               echo "✓ Pushed board changes to bot_army_infra"
             else
               echo "⚠️  Push to bot_army_infra failed (non-blocking)"
@@ -151,7 +169,7 @@ pipeline {
           echo "Updating current symlink..."
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
-          # Deploy via Salt using fresh bot_army_infra checkout + ergon_top scripts
+          # Deploy via Salt using fresh checkouts (gets updated pillar from Sync stage)
           TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
           ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
           ERGON_TOP_URL="${ERGON_TOP_URL:-https://github.com/ergon-automation-labs/ergon_top_directory.git}"
@@ -160,26 +178,22 @@ pipeline {
           INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
           INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
 
-          # Ensure fresh ergon_top_directory checkout
+          # Fresh checkout of ergon_top (for scripts)
           if git -C "${ERGON_TOP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            echo "Updating existing ergon_top_directory checkout..."
             git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
             git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
             git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
           else
-            echo "Cloning fresh ergon_top_directory checkout..."
             rm -rf "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
             git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
           fi
 
-          # Ensure fresh bot_army_infra checkout
+          # Fresh checkout of bot_army_infra (gets updated pillar from Sync stage)
           if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            echo "Updating existing bot_army_infra checkout..."
             git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
             git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
             git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
           else
-            echo "Cloning fresh bot_army_infra checkout..."
             rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
             git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
           fi
