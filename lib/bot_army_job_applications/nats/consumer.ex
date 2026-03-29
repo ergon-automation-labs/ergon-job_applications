@@ -242,16 +242,39 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   def handle_info({:msg, %{topic: "job.listings.list", reply_to: reply_to, body: body} = _msg}, state)
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return paginated list of listings (offset/limit support)
-    offset = case Jason.decode(body) do
-      {:ok, %{"offset" => off}} when is_integer(off) -> max(0, off)
-      _ -> 0
+    # Supports sort_by parameter: "date" (newest first), "company" (alphabetical), "score" (recommendation)
+    {offset, sort_by} = case Jason.decode(body) do
+      {:ok, payload} when is_map(payload) ->
+        off = case payload["offset"] do
+          o when is_integer(o) -> max(0, o)
+          _ -> 0
+        end
+        sort = case payload["sort_by"] do
+          s when is_binary(s) -> s
+          _ -> "date"
+        end
+        {off, sort}
+      _ -> {0, "date"}
     end
 
     response =
       case listing_store().list([]) do
         {:ok, listings} ->
-          # Sort by company name for consistent pagination experience
-          sorted = listings |> Enum.sort_by(&(&1["company"] || ""))
+          # Sort listings based on requested sort_by parameter
+          sorted = case sort_by do
+            "date" ->
+              # Newest first (inserted_at descending)
+              Enum.sort_by(listings, &(&1["inserted_at"] || ""), :desc)
+            "company" ->
+              # Alphabetical by company name
+              Enum.sort_by(listings, &(&1["company"] || ""))
+            "score" ->
+              # Recommendation score descending (highest first)
+              Enum.sort_by(listings, &(-((&1["recommendation_score"] || 0))), :asc)
+            _ ->
+              # Default to date (newest first)
+              Enum.sort_by(listings, &(&1["inserted_at"] || ""), :desc)
+          end
           total = length(sorted)
           limit = 100
           # Apply offset and limit
