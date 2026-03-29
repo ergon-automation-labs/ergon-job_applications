@@ -78,57 +78,54 @@ pipeline {
           echo "==============================================="
 
           TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
-          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
-          INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
-          INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
+          ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
+          ERGON_TOP_URL="${ERGON_TOP_URL:-https://github.com/ergon-automation-labs/ergon_top_directory.git}"
+          ERGON_TOP_BRANCH="${ERGON_TOP_BRANCH:-main}"
 
           mkdir -p "${TMP_ROOT}" 2>/dev/null || true
 
-          # Clone or update fresh checkout of bot_army_infra
-          if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            echo "Updating existing checkout..."
-            if ! git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1; then
-              echo "⚠️  Failed to fetch from bot_army_infra, using existing state"
+          # Clone or update fresh ergon_top_directory workspace
+          if git -C "${ERGON_TOP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Updating existing workspace..."
+            if ! git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1; then
+              echo "⚠️  Failed to fetch workspace, using existing state"
             else
-              git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-              git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+              git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
+              git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
             fi
           else
-            echo "Cloning fresh bot_army_infra checkout..."
-            rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
-            if ! git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1; then
-              echo "⚠️  Failed to clone bot_army_infra, skipping board sync"
+            echo "Cloning fresh ergon_top_directory workspace..."
+            rm -rf "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
+            if ! git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1; then
+              echo "⚠️  Failed to clone workspace, skipping board sync"
               exit 0
             fi
           fi
 
-          # Discover boards and update pillar
+          # Discover boards and update pillar using workspace scripts
           echo "Discovering active job boards..."
-          bash ./scripts/mise-exec.sh mix job_applications.sync_boards_to_salt || {
+          cd "${ERGON_TOP_DIR}/bot_army_job_applications"
+          bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
             echo "⚠️  Board sync failed, but continuing"
             exit 0
           }
 
-          # Copy updated pillar to infra checkout and commit if changed
-          if [ -f "../bot_army_infra/salt/pillar/job_applications.sls" ]; then
-            cp "../bot_army_infra/salt/pillar/job_applications.sls" "${INFRA_REPO_DIR}/salt/pillar/job_applications.sls"
-          fi
-
-          cd "${INFRA_REPO_DIR}"
+          # Commit and push updated pillar
+          cd "${ERGON_TOP_DIR}/bot_army_infra"
           if git diff --quiet salt/pillar/job_applications.sls 2>/dev/null; then
             echo "✓ No board changes detected"
           else
             echo "Board configuration changed, committing and pushing..."
             git add salt/pillar/job_applications.sls
             git commit -m "Auto-sync: update job board configuration from job_applications discovery" >/dev/null 2>&1 || true
-            if git push origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1; then
+            if git push origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1; then
               echo "✓ Pushed board changes to bot_army_infra"
             else
               echo "⚠️  Push to bot_army_infra failed (non-blocking)"
             fi
           fi
 
-          cd "${WORKSPACE}/bot_army_job_applications"
+          cd "${WORKSPACE}"
           echo "✓ Board sync complete"
         '''
       }
@@ -154,19 +151,19 @@ pipeline {
           echo "Updating current symlink..."
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
-          # Deploy via Salt using fresh infra checkout
+          # Deploy via Salt using fresh workspace checkout
           TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
-          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
+          ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
 
-          if [ -d "${INFRA_REPO_DIR}" ] && [ -f "${INFRA_REPO_DIR}/Makefile" ]; then
-            echo "Deploying service via Salt (using fresh infra checkout)..."
-            cd "${INFRA_REPO_DIR}"
+          if [ -d "${ERGON_TOP_DIR}/bot_army_infra" ] && [ -f "${ERGON_TOP_DIR}/bot_army_infra/Makefile" ]; then
+            echo "Deploying service via Salt (using fresh workspace)..."
+            cd "${ERGON_TOP_DIR}"
             make deploy-bot BOT=${BOT_NAME} || {
               echo "⚠️  make deploy-bot failed, attempting manual Salt apply"
               cd "${WORKSPACE}/bot_army_job_applications"
             }
           else
-            echo "Fresh infra checkout not available, using manual Salt apply..."
+            echo "Fresh workspace checkout not available, using manual Salt apply..."
             cd "${WORKSPACE}/bot_army_job_applications"
           fi
 
