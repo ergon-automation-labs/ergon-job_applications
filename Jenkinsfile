@@ -77,35 +77,58 @@ pipeline {
           echo "Syncing job boards to Salt pillar"
           echo "==============================================="
 
-          # Check if bot_army_infra sibling directory exists
-          if [ ! -d "../bot_army_infra" ]; then
-            echo "⚠️  bot_army_infra not available (may be first run)"
-            echo "Skipping board sync (will use existing Salt configuration)"
-            exit 0
+          TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
+          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
+          INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
+          INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
+
+          mkdir -p "${TMP_ROOT}" 2>/dev/null || true
+
+          # Clone or update fresh checkout of bot_army_infra
+          if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Updating existing checkout..."
+            if ! git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1; then
+              echo "⚠️  Failed to fetch from bot_army_infra, using existing state"
+            else
+              git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+              git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+            fi
+          else
+            echo "Cloning fresh bot_army_infra checkout..."
+            rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
+            if ! git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1; then
+              echo "⚠️  Failed to clone bot_army_infra, skipping board sync"
+              exit 0
+            fi
           fi
 
-          cd ..
-
-          # Run board discovery and sync
+          # Discover boards and update pillar
           echo "Discovering active job boards..."
-          cd bot_army_job_applications
-          bash ../scripts/mise-exec.sh mix job_applications.sync_boards_to_salt || {
+          bash ./scripts/mise-exec.sh mix job_applications.sync_boards_to_salt || {
             echo "⚠️  Board sync failed, but continuing"
             exit 0
           }
 
-          # If pillar was updated, commit and push to bot_army_infra
-          cd ../bot_army_infra
-          if git diff --quiet salt/pillar/job_applications.sls 2>/dev/null; then
-            echo "No board changes detected"
-          else
-            echo "Board configuration changed, pushing to bot_army_infra..."
-            git add salt/pillar/job_applications.sls
-            git commit -m "Auto-sync: update job board configuration from job_applications discovery"
-            git push origin main || echo "⚠️  Push to bot_army_infra failed (non-blocking)"
+          # Copy updated pillar to infra checkout and commit if changed
+          if [ -f "../bot_army_infra/salt/pillar/job_applications.sls" ]; then
+            cp "../bot_army_infra/salt/pillar/job_applications.sls" "${INFRA_REPO_DIR}/salt/pillar/job_applications.sls"
           fi
 
-          cd ../bot_army_job_applications
+          cd "${INFRA_REPO_DIR}"
+          if git diff --quiet salt/pillar/job_applications.sls 2>/dev/null; then
+            echo "✓ No board changes detected"
+          else
+            echo "Board configuration changed, committing and pushing..."
+            git add salt/pillar/job_applications.sls
+            git commit -m "Auto-sync: update job board configuration from job_applications discovery" >/dev/null 2>&1 || true
+            if git push origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1; then
+              echo "✓ Pushed board changes to bot_army_infra"
+            else
+              echo "⚠️  Push to bot_army_infra failed (non-blocking)"
+            fi
+          fi
+
+          cd "${WORKSPACE}/bot_army_job_applications"
           echo "✓ Board sync complete"
         '''
       }
@@ -131,30 +154,43 @@ pipeline {
           echo "Updating current symlink..."
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
-          echo "Deploying service via Salt..."
-          echo "⚠️  NOTE: Salt state files must be synced from bot_army_infra before this runs."
-          echo "    Run: cd ../bot_army_infra && make sync-bots"
-          echo ""
+          # Deploy via Salt using fresh infra checkout
+          TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
+          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
 
-          salt_apply() {
-            local state=$1 attempt=0
-            until sudo /opt/salt/salt ${SALT_TARGET} state.apply $state; do
-              attempt=$((attempt + 1))
-              if [ $attempt -ge 3 ]; then echo "salt state.apply $state failed after 3 attempts"; return 1; fi
-              echo "Salt busy, retrying in 30s... (attempt $attempt/3)"
-              sleep 30
-            done
-          }
-          # Apply dependencies first
-          salt_apply common.core
-          salt_apply common.schemas
-          # Then apply the bot state
-          salt_apply bots.${STATE_NAME}
+          if [ -d "${INFRA_REPO_DIR}" ] && [ -f "${INFRA_REPO_DIR}/Makefile" ]; then
+            echo "Deploying service via Salt (using fresh infra checkout)..."
+            cd "${INFRA_REPO_DIR}"
+            make deploy-bot BOT=${BOT_NAME} || {
+              echo "⚠️  make deploy-bot failed, attempting manual Salt apply"
+              cd "${WORKSPACE}/bot_army_job_applications"
+            }
+          else
+            echo "Fresh infra checkout not available, using manual Salt apply..."
+            cd "${WORKSPACE}/bot_army_job_applications"
+          fi
 
-          echo "Restarting service to pick up new release..."
-          sudo launchctl unload /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist 2>/dev/null || true
-          sleep 2
-          sudo launchctl load -w /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist
+          # Fallback manual Salt apply if make deploy-bot not available
+          if [ ! -f "${RELEASE_DIR}/current/${RELEASE_NAME}/bin/${RELEASE_NAME}" ] || ! command -v make >/dev/null; then
+            echo "Applying Salt configuration manually..."
+            salt_apply() {
+              local state=$1 attempt=0
+              until sudo /opt/salt/salt ${SALT_TARGET} state.apply $state; do
+                attempt=$((attempt + 1))
+                if [ $attempt -ge 3 ]; then echo "salt state.apply $state failed after 3 attempts"; return 1; fi
+                echo "Salt busy, retrying in 30s... (attempt $attempt/3)"
+                sleep 30
+              done
+            }
+            salt_apply common.core
+            salt_apply common.schemas
+            salt_apply bots.${STATE_NAME}
+
+            echo "Restarting service..."
+            sudo launchctl unload /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist 2>/dev/null || true
+            sleep 2
+            sudo launchctl load -w /Library/LaunchDaemons/com.botarmy.${BOT_NAME}.plist
+          fi
 
           echo "Checking service health..."
           /opt/bot_army/scripts/health_check.sh ${BOT_NAME}
