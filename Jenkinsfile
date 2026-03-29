@@ -119,8 +119,13 @@ pipeline {
 
           # Discover boards and update pillar (Jenkins workspace + ergon_top scripts)
           echo "Discovering active job boards..."
-          bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
-            echo "⚠️  Board sync failed, but continuing"
+          timeout 120 bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "⚠️  Board discovery timed out after 120s, continuing without sync"
+            else
+              echo "⚠️  Board sync failed (exit code: $EXIT_CODE), continuing"
+            fi
             exit 0
           }
 
