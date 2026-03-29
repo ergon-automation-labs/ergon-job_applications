@@ -153,6 +153,47 @@ pipeline {
       }
     }
 
+    stage('Sync Job Boards to Salt') {
+      steps {
+        sh '''
+          echo "==============================================="
+          echo "Syncing job boards to Salt pillar"
+          echo "==============================================="
+
+          # Check if bot_army_infra sibling directory exists
+          if [ ! -d "../bot_army_infra" ]; then
+            echo "⚠️  bot_army_infra not available (may be first run)"
+            echo "Skipping board sync (will use existing Salt configuration)"
+            exit 0
+          fi
+
+          cd ..
+
+          # Run board discovery and sync
+          echo "Discovering active job boards..."
+          cd bot_army_job_applications
+          bash ../scripts/mise-exec.sh mix job_applications.sync_boards_to_salt || {
+            echo "⚠️  Board sync failed, but continuing"
+            exit 0
+          }
+
+          # If pillar was updated, commit and push to bot_army_infra
+          cd ../bot_army_infra
+          if git diff --quiet salt/pillar/job_applications.sls 2>/dev/null; then
+            echo "No board changes detected"
+          else
+            echo "Board configuration changed, pushing to bot_army_infra..."
+            git add salt/pillar/job_applications.sls
+            git commit -m "Auto-sync: update job board configuration from job_applications discovery"
+            git push origin main || echo "⚠️  Push to bot_army_infra failed (non-blocking)"
+          fi
+
+          cd ../bot_army_job_applications
+          echo "✓ Board sync complete"
+        '''
+      }
+    }
+
   }
 
   post {
