@@ -18,6 +18,7 @@ defmodule Mix.Tasks.JobApplications.SyncBoardsToSalt do
   require Logger
 
   @default_timeout_ms 5000
+  @connect_timeout_ms 3000
 
   @companies %{
     "ai" => [
@@ -122,6 +123,7 @@ defmodule Mix.Tasks.JobApplications.SyncBoardsToSalt do
 
   defp discover_boards(companies) do
     Enum.map(companies, fn {name, slug, source} ->
+      Mix.shell().info("  Checking #{name}...")
       status = check_board(source, slug)
       {name, slug, source, status}
     end)
@@ -158,13 +160,26 @@ defmodule Mix.Tasks.JobApplications.SyncBoardsToSalt do
   defp http_get(url) do
     url_str = String.to_charlist(url)
 
+    # Ensure inets is started (only once per task)
     case :inets.start() do
       {:ok, _} -> :ok
       {:error, {:already_started, :inets}} -> :ok
       {:error, e} -> throw(e)
     end
 
-    case :httpc.request(:get, {url_str, []}, [timeout: @default_timeout_ms], []) do
+    # Use connect_timeout + timeout for more reliable handling
+    http_options = [
+      timeout: @default_timeout_ms,
+      connect_timeout: @connect_timeout_ms
+    ]
+
+    # Add sync and body_format options
+    options = [
+      {:sync, true},
+      {:body_format, :binary}
+    ]
+
+    case :httpc.request(:get, {url_str, []}, http_options, options) do
       {:ok, {status_line, _headers, body}} ->
         {_, status_code, _} = status_line
         if status_code == 200 do
