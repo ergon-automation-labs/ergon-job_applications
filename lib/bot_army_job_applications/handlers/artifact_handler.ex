@@ -169,6 +169,51 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     end
   end
 
+  @doc """
+  Handle artifact update from TUI.
+
+  Allows user to edit generated artifacts (resume variant or cover letter) via the TUI.
+  """
+  def handle_update(message) do
+    payload = message["payload"]
+    application_id = payload["application_id"]
+
+    case BotArmyJobApplications.ApplicationServer.get(application_id) do
+      {:ok, application} ->
+        artifacts = application["artifacts"] || %{}
+
+        # Update resume_md if provided
+        artifacts =
+          if Map.has_key?(payload, "resume_md") do
+            Map.put(artifacts, "resume_md", payload["resume_md"])
+          else
+            artifacts
+          end
+
+        # Update cover_letter_md if provided
+        artifacts =
+          if Map.has_key?(payload, "cover_letter_md") do
+            Map.put(artifacts, "cover_letter_md", payload["cover_letter_md"])
+          else
+            artifacts
+          end
+
+        # Add update timestamp
+        artifacts = Map.put(artifacts, "updated_at", NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601())
+
+        case BotArmyJobApplications.ApplicationServer.set_artifacts(application_id, artifacts) do
+          {:ok, _updated_app} ->
+            Logger.info("Artifacts updated for application: #{application_id}")
+
+          {:error, reason} ->
+            Logger.error("Failed to update artifacts: #{inspect(reason)}")
+        end
+
+      {:error, :not_found} ->
+        Logger.error("Application not found for artifact update: #{application_id}")
+    end
+  end
+
   # Private helpers
 
   defp validate_artifact_request(payload) when is_map(payload) do

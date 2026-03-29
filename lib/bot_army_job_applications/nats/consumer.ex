@@ -60,6 +60,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       "job.application.artifact.request" ->
         BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
 
+      "job.application.artifact.update" ->
+        BotArmyJobApplications.Handlers.ArtifactHandler.handle_update(message)
+
       "job.application.interview_prep.request" ->
         BotArmyJobApplications.Handlers.InterviewPrepHandler.handle_request(message)
 
@@ -137,6 +140,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.application.command.confirm_signal",
             "job.application.command.dismiss_signal",
             "job.application.artifact.request",
+            "job.application.artifact.update",
             "job.application.interview_prep.request",
             "job.digest.request",
             "job.email.interview_request",
