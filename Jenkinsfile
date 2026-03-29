@@ -151,11 +151,26 @@ pipeline {
           echo "Updating current symlink..."
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
-          # Deploy via Salt using fresh bot_army_infra checkout
+          # Deploy via Salt using fresh bot_army_infra checkout + ergon_top scripts
           TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
+          ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
+          ERGON_TOP_URL="${ERGON_TOP_URL:-https://github.com/ergon-automation-labs/ergon_top_directory.git}"
+          ERGON_TOP_BRANCH="${ERGON_TOP_BRANCH:-main}"
           INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
           INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
           INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
+
+          # Ensure fresh ergon_top_directory checkout
+          if git -C "${ERGON_TOP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Updating existing ergon_top_directory checkout..."
+            git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
+          else
+            echo "Cloning fresh ergon_top_directory checkout..."
+            rm -rf "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
+            git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
+          fi
 
           # Ensure fresh bot_army_infra checkout
           if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
