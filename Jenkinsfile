@@ -151,19 +151,33 @@ pipeline {
           echo "Updating current symlink..."
           ln -sfn "${DEST}" "${RELEASE_DIR}/current"
 
-          # Deploy via Salt using fresh workspace checkout
+          # Deploy via Salt using fresh bot_army_infra checkout
           TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
-          ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
+          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
+          INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
+          INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
 
-          if [ -d "${ERGON_TOP_DIR}/bot_army_infra" ] && [ -f "${ERGON_TOP_DIR}/bot_army_infra/Makefile" ]; then
-            echo "Deploying service via Salt (using fresh workspace)..."
-            cd "${ERGON_TOP_DIR}"
+          # Ensure fresh bot_army_infra checkout
+          if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Updating existing bot_army_infra checkout..."
+            git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+            git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
+          else
+            echo "Cloning fresh bot_army_infra checkout..."
+            rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
+            git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
+          fi
+
+          if [ -d "${INFRA_REPO_DIR}" ] && [ -f "${INFRA_REPO_DIR}/Makefile" ]; then
+            echo "Deploying service via Salt..."
+            cd "${INFRA_REPO_DIR}"
             make deploy-bot BOT=${BOT_NAME} || {
               echo "⚠️  make deploy-bot failed, attempting manual Salt apply"
               cd "${WORKSPACE}/bot_army_job_applications"
             }
           else
-            echo "Fresh workspace checkout not available, using manual Salt apply..."
+            echo "Fresh bot_army_infra checkout not available, using manual Salt apply..."
             cd "${WORKSPACE}/bot_army_job_applications"
           fi
 
