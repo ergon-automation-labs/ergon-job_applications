@@ -31,6 +31,7 @@ devtools:
   Twilio: {slug: twilio, platform: greenhouse}
   Auth0: {slug: auth0, platform: greenhouse}
   Segment: {slug: segment, platform: greenhouse}
+  Tailscale: {slug: tailscale, platform: greenhouse}
   # Add more here
 
 infra:
