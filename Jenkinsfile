@@ -222,6 +222,13 @@ pipeline {
             exit 0
           fi
 
+          # Source bot environment variables before running migration
+          ENV_FILE="/etc/bot_army/${BOT_NAME}.env"
+          if [ -f "$ENV_FILE" ]; then
+            echo "Loading environment from $ENV_FILE"
+            source "$ENV_FILE"
+          fi
+
           # Run migrations using the release
           echo "Running: $RELEASE_BIN eval 'BotArmyJobApplications.Release.migrate()'"
 
