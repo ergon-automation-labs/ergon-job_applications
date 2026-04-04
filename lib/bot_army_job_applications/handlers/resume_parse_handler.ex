@@ -17,6 +17,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
   Extracts text and initiates LLM parsing.
   """
   def handle_upload(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -28,16 +29,16 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
         case extract_resume_text(file_path, original_filename) do
           {:ok, text} ->
             # Initiate LLM parse with file metadata in source_metadata
-            initiate_parse(text, event_id, file_path, original_filename)
+            initiate_parse(text, event_id, file_path, original_filename, tenant_id, user_id)
 
           {:error, reason} ->
             Logger.error("Failed to extract resume text: #{inspect(reason)}")
-            publish_parse_failed(event_id, file_path, :extraction_failed)
+            publish_parse_failed(event_id, file_path, :extraction_failed, tenant_id, user_id)
         end
 
       {:error, reason} ->
         Logger.warning("Invalid upload request: #{inspect(reason)}")
-        publish_parse_failed(event_id, file_path, reason)
+        publish_parse_failed(event_id, file_path, reason, tenant_id, user_id)
     end
   end
 
@@ -48,6 +49,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
   Persists parsed resume to database.
   """
   def handle_parse_response(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     payload = message["payload"]
 
@@ -61,16 +63,16 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
           # Validate we have required fields
           case validate_parsed_resume(identity, payload["completion"]) do
             {:ok, parsed_data} ->
-              persist_resume(parsed_data, file_path, original_filename)
+              persist_resume(parsed_data, file_path, original_filename, tenant_id, user_id)
 
             {:error, reason} ->
               Logger.error("Invalid parsed resume structure: #{inspect(reason)}")
-              publish_parse_failed(nil, file_path, :invalid_structure)
+              publish_parse_failed(nil, file_path, :invalid_structure, tenant_id, user_id)
           end
 
         {:error, reason} ->
           Logger.error("Failed to extract resume JSON: #{inspect(reason)}")
-          publish_parse_failed(nil, file_path, :json_extraction_failed)
+          publish_parse_failed(nil, file_path, :json_extraction_failed, tenant_id, user_id)
       end
     end
   end
@@ -99,7 +101,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     BotArmyJobApplications.TextExtractor.extract(file_path, original_filename)
   end
 
-  defp initiate_parse(text, event_id, file_path, original_filename) do
+  defp initiate_parse(text, event_id, file_path, original_filename, tenant_id, user_id) do
     prompt = """
     Parse the following resume text and return ONLY a JSON object with this structure:
     {
@@ -144,7 +146,9 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
       nil,
       %{
         "file_path" => file_path,
-        "original_filename" => original_filename
+        "original_filename" => original_filename,
+        "tenant_id" => tenant_id,
+        "user_id" => user_id
       }
     ) do
       :ok ->
@@ -152,7 +156,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
 
       {:error, reason} ->
         Logger.error("Failed to publish resume parse request: #{inspect(reason)}")
-        publish_parse_failed(event_id, file_path, :publish_failed)
+        publish_parse_failed(event_id, file_path, :publish_failed, tenant_id, user_id)
     end
   end
 
@@ -162,29 +166,31 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     {:ok, %{}}
   end
 
-  defp persist_resume(parsed_data, file_path, original_filename) do
+  defp persist_resume(parsed_data, file_path, original_filename, tenant_id, user_id) do
     case extract_full_resume_from_llm(parsed_data) do
       {:ok, resume_data} ->
         file_metadata = %{
           "file_path" => file_path,
-          "original_filename" => original_filename
+          "original_filename" => original_filename,
+          "tenant_id" => tenant_id,
+          "user_id" => user_id
         }
 
         case BotArmyJobApplications.ResumeStore.create_from_parsed(resume_data, file_metadata) do
           {:ok, resume} ->
             Logger.info("Persisted parsed resume: #{resume["id"]}")
-            publish_resume_created(resume)
+            publish_resume_created(resume, tenant_id, user_id)
             # Clean up temp file
             BotArmyJobApplications.FileStore.delete(file_path)
 
           {:error, reason} ->
             Logger.error("Failed to persist parsed resume: #{inspect(reason)}")
-            publish_parse_failed(nil, file_path, :persistence_failed)
+            publish_parse_failed(nil, file_path, :persistence_failed, tenant_id, user_id)
         end
 
       {:error, reason} ->
         Logger.error("Failed to extract full resume from LLM response: #{inspect(reason)}")
-        publish_parse_failed(nil, file_path, :extraction_failed)
+        publish_parse_failed(nil, file_path, :extraction_failed, tenant_id, user_id)
     end
   end
 
@@ -200,7 +206,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     }}
   end
 
-  defp publish_resume_created(resume) do
+  defp publish_resume_created(resume, tenant_id, user_id) do
     event = %{
       "event" => "job.resume.created",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -209,6 +215,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "job_applications.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "resume_id" => resume["id"],
         "name" => resume.dig("identity", "name") || "",
@@ -220,7 +228,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     BotArmyJobApplications.NATS.Publisher.publish(event)
   end
 
-  defp publish_parse_failed(event_id, file_path, reason) do
+  defp publish_parse_failed(event_id, file_path, reason, tenant_id, user_id) do
     event = %{
       "event" => "job.resume.parse.failed",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -229,6 +237,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "job_applications.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "file_path" => file_path,
         "reason" => inspect(reason),

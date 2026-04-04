@@ -47,10 +47,11 @@ defmodule BotArmyJobApplications.DigestScheduler do
   # Private functions
 
   defp run_digest do
-    case application_store().list() do
+    default_tenant_id = BotArmyCore.Tenant.default_tenant_id()
+    case application_store().list(default_tenant_id) do
       {:ok, apps} ->
         digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)
-        BotArmyJobApplications.Handlers.DigestHandler.publish_digest(digest, nil)
+        BotArmyJobApplications.Handlers.DigestHandler.publish_digest(digest, nil, default_tenant_id, nil)
         Logger.info("Scheduled digest generated and published")
 
       {:error, reason} ->

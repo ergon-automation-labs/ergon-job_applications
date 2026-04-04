@@ -35,6 +35,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   then fires async LLM requests for each result.
   """
   def handle_recommend(message, reply_to, conn) when is_map(message) and is_binary(reply_to) and is_binary(reply_to) do
+    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     resume_id = Map.get(payload, "resume_id")
@@ -42,9 +43,9 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
     case validate_recommend_payload(payload) do
       :ok ->
-        case get_default_resume(resume_id) do
+        case get_default_resume(tenant_id, resume_id) do
           {:ok, resume} ->
-            case listing_store().list([]) do
+            case listing_store().list(tenant_id, []) do
               {:ok, listings} ->
                 # Synchronous: tag overlap scoring
                 Logger.info("handle_recommend: Resume has #{length(resume["skills"] || [])} skills and #{length(resume["roles"] || [])} roles")
@@ -119,6 +120,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   parses score + reason, updates listing, pushes to GTD if >= 0.80.
   """
   def handle_llm_score_response(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     listing_id = source_metadata["listing_id"]
     resume_id = source_metadata["resume_id"]
@@ -129,7 +131,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
         Logger.info("LLM scored listing #{listing_id} (resume: #{resume_id}): #{(score * 100) |> trunc()}%")
 
         # Update listing with score + reason
-        case listing_store().update(listing_id, %{
+        case listing_store().update(tenant_id, listing_id, %{
           "recommendation_score" => score,
           "recommendation_reason" => reason,
           "scored_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
@@ -140,14 +142,14 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
             # If score >= 0.80 and not yet pushed to GTD, push it (if GTD integration enabled)
             if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
               if score >= 0.80 and not (listing["gtd_pushed"] || false) do
-                publish_gtd_inbox_item(listing, score, reason, resume_id)
+                publish_gtd_inbox_item(listing, score, reason, resume_id, tenant_id, user_id)
                 # Mark as pushed
-                listing_store().update(listing_id, %{"gtd_pushed" => true})
+                listing_store().update(tenant_id, listing_id, %{"gtd_pushed" => true})
               end
             end
 
             # Publish event
-            publish_recommendation_scored(listing, score, reason)
+            publish_recommendation_scored(listing, score, reason, tenant_id, user_id)
 
           {:error, reason} ->
             Logger.error("Failed to update listing #{listing_id}: #{inspect(reason)}")
@@ -166,8 +168,8 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   Fired from IngestHandler after successful listing creation.
   Gets default resume and fires async LLM scoring request.
   """
-  def score_listing_async(listing) when is_map(listing) do
-    case get_default_resume(nil) do
+  def score_listing_async(listing, tenant_id) when is_map(listing) do
+    case get_default_resume(tenant_id, nil) do
       {:ok, resume} ->
         listing_id = listing["id"]
         resume_id = resume["id"]
@@ -440,12 +442,12 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
   defp validate_recommend_payload(_), do: {:error, "payload must be a map"}
 
-  defp get_default_resume(resume_id) when is_binary(resume_id) do
-    resume_store().get(resume_id)
+  defp get_default_resume(tenant_id, resume_id) when is_binary(resume_id) do
+    resume_store().get(tenant_id, resume_id)
   end
 
-  defp get_default_resume(_) do
-    case resume_store().list() do
+  defp get_default_resume(tenant_id, _) do
+    case resume_store().list(tenant_id) do
       {:ok, resumes} when is_list(resumes) and length(resumes) > 0 ->
         # Return first resume (already a map from store)
         {:ok, List.first(resumes)}
@@ -498,7 +500,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     if conn, do: Gnat.pub(conn, reply_to, response)
   end
 
-  defp publish_gtd_inbox_item(listing, score, reason, resume_id) do
+  defp publish_gtd_inbox_item(listing, score, reason, resume_id, tenant_id, user_id) do
     company = listing["company"]
     role = listing["role_title"]
     score_percent = (score * 100) |> Float.round(0) |> trunc()
@@ -513,6 +515,8 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
       "source_node" => node() |> Atom.to_string(),
       "triggered_by" => "job_applications.recommendation",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "item" => message,
         "source_domain" => "job_recommendation",
@@ -529,7 +533,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     Publisher.publish(event)
   end
 
-  defp publish_recommendation_scored(listing, score, reason) do
+  defp publish_recommendation_scored(listing, score, reason, tenant_id, user_id) do
     event = %{
       "event" => "job.listing.recommendation_scored",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -538,6 +542,8 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
       "source_node" => node() |> Atom.to_string(),
       "triggered_by" => "job_applications.recommendation",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "listing_id" => listing["id"],
         "score" => score,

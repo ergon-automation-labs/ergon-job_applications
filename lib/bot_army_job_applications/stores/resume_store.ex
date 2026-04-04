@@ -116,12 +116,13 @@ defmodule BotArmyJobApplications.ResumeStore do
     case BotArmyJobApplications.Repo.insert(changeset) do
       {:ok, db_resume} ->
         resume = schema_to_map(db_resume)
+        tenant_id = file_metadata["tenant_id"]
 
         # Create roles and bullets from parsed data
-        :ok = create_roles_and_bullets(resume_id, parsed_data)
+        :ok = create_roles_and_bullets(resume_id, parsed_data, tenant_id)
 
         # Create skills from parsed data
-        :ok = create_skills(resume_id, parsed_data)
+        :ok = create_skills(resume_id, parsed_data, tenant_id)
 
         new_state = Map.put(state, resume_id, resume)
         Logger.info("Created resume from parsed data: #{resume_id}")
@@ -213,10 +214,10 @@ defmodule BotArmyJobApplications.ResumeStore do
                 )
 
                 # Create new roles and bullets
-                :ok = create_roles_and_bullets(resume_id, parsed_data)
+                :ok = create_roles_and_bullets(resume_id, parsed_data, tenant_id)
 
                 # Create new skills
-                :ok = create_skills(resume_id, parsed_data)
+                :ok = create_skills(resume_id, parsed_data, tenant_id)
 
                 # Update cache with new data
                 updated_resume = schema_to_map(updated_db_resume)
@@ -412,7 +413,7 @@ defmodule BotArmyJobApplications.ResumeStore do
   defp map_to_list(m) when is_map(m), do: Map.values(m)
 
   # Helper for creating roles and bullets from parsed resume data
-  defp create_roles_and_bullets(resume_id, parsed_data) do
+  defp create_roles_and_bullets(resume_id, parsed_data, tenant_id) do
     roles = Map.get(parsed_data, "roles", [])
 
     Enum.with_index(roles)
@@ -420,6 +421,7 @@ defmodule BotArmyJobApplications.ResumeStore do
       role_changeset = BotArmyJobApplications.Schemas.ResumeRole.changeset(
         %BotArmyJobApplications.Schemas.ResumeRole{resume_id: resume_id},
         %{
+          "tenant_id" => tenant_id,
           "title" => Map.get(role, "title", ""),
           "company" => Map.get(role, "company", ""),
           "start_date" => Map.get(role, "start_date"),
@@ -437,6 +439,7 @@ defmodule BotArmyJobApplications.ResumeStore do
             bullet_changeset = BotArmyJobApplications.Schemas.ResumeBullet.changeset(
               %BotArmyJobApplications.Schemas.ResumeBullet{role_id: db_role.id},
               %{
+                "tenant_id" => tenant_id,
                 "text" => bullet,
                 "sort_order" => bullet_idx
               }
@@ -454,13 +457,14 @@ defmodule BotArmyJobApplications.ResumeStore do
   end
 
   # Helper for creating skills from parsed resume data
-  defp create_skills(resume_id, parsed_data) do
+  defp create_skills(resume_id, parsed_data, tenant_id) do
     skills = Map.get(parsed_data, "skills", [])
 
     Enum.each(skills, fn skill ->
       skill_changeset = BotArmyJobApplications.Schemas.Skill.changeset(
         %BotArmyJobApplications.Schemas.Skill{resume_id: resume_id},
         %{
+          "tenant_id" => tenant_id,
           "name" => Map.get(skill, "name", ""),
           "proficiency" => Map.get(skill, "proficiency", "intermediate"),
           "years" => Map.get(skill, "years", 0)

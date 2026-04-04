@@ -361,10 +361,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "requests.job_applications.snapshot", reply_to: reply_to} = _msg}, state)
+  def handle_info({:msg, %{topic: "requests.job_applications.snapshot", reply_to: reply_to, body: body} = _msg}, state)
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: TUI snapshot format for job-applications-tui
-    snapshot = BotArmyJobApplications.Handlers.TuiCommandHandler.get_snapshot()
+    message = if is_binary(body), do: Jason.decode!(body), else: %{}
+    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    snapshot = BotArmyJobApplications.Handlers.TuiCommandHandler.get_snapshot(tenant_id)
     response = Jason.encode!(snapshot)
 
     if state.conn do

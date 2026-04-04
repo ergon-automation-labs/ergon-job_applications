@@ -34,14 +34,15 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
   def handle_request(message, reply_to \\ nil, conn \\ nil)
 
   def handle_request(message, _reply_to, _conn) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     application_id = payload["application_id"]
 
     case validate_request_payload(payload) do
       :ok ->
-        case application_store().get(application_id) do
+        case application_store().get(tenant_id, application_id) do
           {:ok, application} ->
-            case get_default_resume() do
+            case get_default_resume(tenant_id) do
               {:ok, resume} ->
                 fire_interview_prep_request(application, resume)
 
@@ -69,12 +70,13 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
   updates application artifacts, pushes to GTD.
   """
   def handle_llm_response(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     payload = message["payload"] || %{}
     prep_text = payload["completion"] || ""
 
-    case application_store().get(application_id) do
+    case application_store().get(tenant_id, application_id) do
       {:ok, application} ->
         # Store prep in artifacts
         existing_artifacts = application["artifacts"] || %{}
@@ -85,18 +87,18 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
             "interview_prep_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
           })
 
-        case application_store().update(application_id, %{"artifacts" => updated_artifacts}) do
+        case application_store().update(tenant_id, application_id, %{"artifacts" => updated_artifacts}) do
           {:ok, updated_application} ->
             Logger.info(
               "Interview prep generated and stored for application #{application_id} (#{updated_application["company"]} — #{updated_application["role_title"]})"
             )
 
             # Publish result event
-            publish_interview_prep_result(updated_application, prep_text)
+            publish_interview_prep_result(updated_application, prep_text, tenant_id, user_id)
 
             # Push to GTD inbox
             if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
-              publish_gtd_prep_task(updated_application)
+              publish_gtd_prep_task(updated_application, tenant_id, user_id)
             end
 
           {:error, reason} ->
@@ -121,8 +123,8 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
 
   defp validate_request_payload(_), do: {:error, "payload must be a map"}
 
-  defp get_default_resume do
-    case resume_store().list() do
+  defp get_default_resume(tenant_id) do
+    case resume_store().list(tenant_id) do
       {:ok, resumes} when is_list(resumes) and length(resumes) > 0 ->
         {:ok, List.first(resumes)}
 
@@ -217,7 +219,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
     """
   end
 
-  defp publish_interview_prep_result(application, prep_text) do
+  defp publish_interview_prep_result(application, prep_text, tenant_id, user_id) do
     event = %{
       "event" => "job.application.interview_prep.result",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -226,6 +228,8 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
       "source_node" => node() |> Atom.to_string(),
       "triggered_by" => "job_applications.interview_prep",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "application_id" => application["id"],
         "company" => application["company"],
@@ -237,7 +241,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
     Publisher.publish(event)
   end
 
-  defp publish_gtd_prep_task(application) do
+  defp publish_gtd_prep_task(application, tenant_id, user_id) do
     company = application["company"]
     role_title = application["role_title"]
 
@@ -249,6 +253,8 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
       "source_node" => node() |> Atom.to_string(),
       "triggered_by" => "job_applications.interview_prep",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "title" => "Interview prep ready: #{company} — #{role_title}",
         "context" => "recruiting",

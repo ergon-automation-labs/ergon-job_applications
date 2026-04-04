@@ -24,8 +24,8 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Build snapshot payload for TUI: list applications and map to TUI format.
   Returns map suitable for JSON: %{"applications" => [%{"id" => ..., "company" => ..., ...}, ...]}.
   """
-  def get_snapshot do
-    case application_store().list() do
+  def get_snapshot(tenant_id) do
+    case application_store().list(tenant_id) do
       {:ok, applications} ->
         mapped =
           applications
@@ -45,14 +45,16 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
 
   Creates application and starts ApplicationServer; publishes snapshot.
   """
-  def handle_create(payload) when is_map(payload) do
+  def handle_create(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
     # Check if this is a listing_id-based create (from listings view)
     listing_id = trim(payload["listing_id"])
 
     {company, role, jd_url} =
       if listing_id != "" do
         # Look up listing to get company and role
-        case listing_store().get(listing_id) do
+        case listing_store().get(tenant_id, listing_id) do
           {:ok, listing} ->
             {
               listing["company"] || "",
@@ -84,6 +86,8 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
     else
       state = tui_status_to_state(status)
       create_payload = %{
+        "tenant_id" => tenant_id,
+        "user_id" => user_id,
         "company" => company,
         "role_title" => role,
         "state" => state,
@@ -122,7 +126,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
             BotArmyJobApplications.ApplicationSupervisor.start_child(application["id"])
           end
           Logger.info("TUI create: application #{application["id"]} (#{company} / #{role})")
-          publish_snapshot()
+          publish_snapshot(tenant_id)
           {:ok, application}
 
         {:error, reason} ->
@@ -138,7 +142,9 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Handle full update from TUI edit form. Payload: id, company, role, status, stage, location, last_contact, notes.
   Updates application in store; appends history event if state changed; publishes snapshot.
   """
-  def handle_update(payload) when is_map(payload) do
+  def handle_update(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
     id = payload["id"]
     company = trim(payload["company"])
     role = trim(payload["role"])
@@ -154,7 +160,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
     else
       to_state = tui_status_to_state(status)
 
-      case application_store().get(id) do
+      case application_store().get(tenant_id, id) do
         {:ok, app} ->
           from_state = app["state"] || "identified"
           new_history = app["history"] || []
@@ -190,10 +196,10 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
             "salary_range" => salary_range
           }
 
-          case application_store().update(id, update_payload) do
+          case application_store().update(tenant_id, id, update_payload) do
             {:ok, _} ->
               Logger.info("TUI update: application #{id} (#{company} / #{role})")
-              publish_snapshot()
+              publish_snapshot(tenant_id)
               {:ok, id}
 
             {:error, reason} ->
@@ -214,14 +220,16 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Handle delete from TUI. Payload: id.
   Deletes application from store, stops ApplicationServer if running, publishes snapshot.
   """
-  def handle_delete(payload) when is_map(payload) do
+  def handle_delete(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
     id = payload["id"]
 
     if not is_binary(id) or id == "" do
       Logger.warning("TUI delete: id required")
       {:error, :invalid_payload}
     else
-      case application_store().delete(id) do
+      case application_store().delete(tenant_id, id) do
         :ok ->
           try do
             BotArmyJobApplications.ApplicationSupervisor.stop_child(id)
@@ -229,7 +237,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
             _ -> :ok
           end
           Logger.info("TUI delete: application #{id}")
-          publish_snapshot()
+          publish_snapshot(tenant_id)
           :ok
 
         {:error, :not_found} ->
@@ -249,7 +257,9 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Handle update_status from TUI. Payload: id, status.
   Updates application state and history directly (no transition validation); publishes snapshot.
   """
-  def handle_update_status(payload) when is_map(payload) do
+  def handle_update_status(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
     id = payload["id"]
     status = trim(payload["status"])
 
@@ -259,7 +269,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
     else
       to_state = tui_status_to_state(status)
 
-      case application_store().get(id) do
+      case application_store().get(tenant_id, id) do
         {:ok, app} ->
           from_state = app["state"] || "identified"
           event = %{
@@ -271,10 +281,10 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
           }
           new_history = (app["history"] || []) ++ [event]
 
-          case application_store().update(id, %{"state" => to_state, "history" => new_history}) do
+          case application_store().update(tenant_id, id, %{"state" => to_state, "history" => new_history}) do
             {:ok, _} ->
               Logger.info("TUI update_status: #{id} -> #{to_state}")
-              publish_snapshot()
+              publish_snapshot(tenant_id)
               :ok
 
             {:error, reason} ->
@@ -295,7 +305,9 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Handle add_note from TUI. Payload: id, note.
   Appends note to application strategy; publishes snapshot.
   """
-  def handle_add_note(payload) when is_map(payload) do
+  def handle_add_note(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
     id = payload["id"]
     note = trim(payload["note"])
 
@@ -303,15 +315,15 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
       Logger.warning("TUI add_note: id and note required")
       {:error, :invalid_payload}
     else
-      case application_store().get(id) do
+      case application_store().get(tenant_id, id) do
         {:ok, app} ->
           existing = app["strategy"] || ""
           new_strategy = if existing == "", do: note, else: existing <> "\n- " <> note
 
-          case application_store().update(id, %{"strategy" => new_strategy}) do
+          case application_store().update(tenant_id, id, %{"strategy" => new_strategy}) do
             {:ok, _} ->
               Logger.info("TUI add_note: appended to #{id}")
-              publish_snapshot()
+              publish_snapshot(tenant_id)
               :ok
 
             {:error, reason} ->
@@ -403,8 +415,8 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   defp trim(s) when is_binary(s), do: String.trim(s)
   defp trim(_), do: ""
 
-  defp publish_snapshot do
-    snapshot = get_snapshot()
+  defp publish_snapshot(tenant_id) do
+    snapshot = get_snapshot(tenant_id)
     BotArmyJobApplications.NATS.Publisher.publish_snapshot(snapshot)
   end
 end

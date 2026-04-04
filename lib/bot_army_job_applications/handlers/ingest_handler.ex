@@ -15,7 +15,9 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
   - If dedup_hash already exists → skip (idempotent).
   - If new → insert, then publish events.job.listings.new.
   """
-  def handle_ingest(payload) when is_map(payload) do
+  def handle_ingest(message) when is_map(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    payload = message["payload"] || %{}
     store = listing_store()
     company = payload["company"] || payload["company_name"]
     role_title = payload["role_title"] || payload["title"]
@@ -27,19 +29,19 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
     else
       dedup_hash = BotArmyJobApplications.Ingestion.Dedup.dedup_hash(company, role_title, jd_url)
 
-      case store.get_by_dedup_hash(dedup_hash) do
+      case store.get_by_dedup_hash(tenant_id, dedup_hash) do
         {:ok, _existing} ->
           Logger.debug("Ingest skipped: duplicate listing #{dedup_hash}")
           {:ok, :duplicate}
 
         {:error, :not_found} ->
-          attrs = build_listing_attrs(payload, dedup_hash)
+          attrs = build_listing_attrs(payload, dedup_hash, tenant_id, user_id)
 
           case store.create(attrs) do
             {:ok, listing} ->
-              publish_listing_new(listing)
+              publish_listing_new(listing, tenant_id, user_id)
               # Fire async LLM recommendation scoring
-              BotArmyJobApplications.Handlers.RecommendationHandler.score_listing_async(listing)
+              BotArmyJobApplications.Handlers.RecommendationHandler.score_listing_async(listing, tenant_id)
               {:ok, {:created, listing}}
 
             {:error, reason} ->
@@ -52,10 +54,12 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
 
   def handle_ingest(_), do: {:error, :invalid_payload}
 
-  defp build_listing_attrs(payload, dedup_hash) do
+  defp build_listing_attrs(payload, dedup_hash, tenant_id, user_id) do
     now_iso = NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
 
     %{
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "source" => payload["source"] || "manual",
       "source_url" => payload["source_url"],
       "company" => payload["company"] || payload["company_name"],
@@ -72,7 +76,7 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
     }
   end
 
-  defp publish_listing_new(listing) do
+  defp publish_listing_new(listing, tenant_id, user_id) do
     event = %{
       "event" => "job.listings.new",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -81,6 +85,8 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
       "source_node" => node() |> Atom.to_string(),
       "triggered_by" => "job_applications.ingest",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => listing
     }
 

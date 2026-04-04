@@ -35,6 +35,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
   - {:error, :invalid_payload} if required fields are missing
   """
   def handle_email_signal(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"]
 
     case validate_payload(payload) do
@@ -47,7 +48,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
             {:ok, :no_match}
 
           signal_template ->
-            process_signal(message, payload, signal_template)
+            process_signal(message, payload, signal_template, tenant_id, user_id)
         end
 
       {:error, reason} ->
@@ -75,7 +76,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
     end
   end
 
-  defp process_signal(message, payload, signal_template) do
+  defp process_signal(message, payload, signal_template, tenant_id, user_id) do
     # Build the pending signal map
     signal = %{
       "type" => signal_template["type"],
@@ -88,15 +89,15 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
     }
 
     # Match email to application by company name
-    case find_matching_application(payload) do
+    case find_matching_application(payload, tenant_id) do
       {:ok, application} ->
         application_id = application["id"]
 
         # Update application with pending_signal
-        case application_store().update(application_id, %{"pending_signal" => signal}) do
+        case application_store().update(tenant_id, application_id, %{"pending_signal" => signal}) do
           {:ok, updated_app} ->
             Logger.info("Email signal detected for application: #{application_id}")
-            publish_signal_detected(updated_app, signal, message["event_id"])
+            publish_signal_detected(updated_app, signal, message["event_id"], tenant_id, user_id)
             {:ok, {:signal_detected, signal}}
 
           {:error, reason} ->
@@ -110,10 +111,10 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
     end
   end
 
-  defp find_matching_application(payload) do
+  defp find_matching_application(payload, tenant_id) do
     match_text = extract_match_text(payload)
 
-    case application_store().list() do
+    case application_store().list(tenant_id) do
       {:ok, applications} ->
         # Try to find application by company name match
         case Enum.find(applications, &application_matches?(&1, match_text)) do
@@ -161,7 +162,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
     end
   end
 
-  defp publish_signal_detected(application, signal, event_id) do
+  defp publish_signal_detected(application, signal, event_id, tenant_id, user_id) do
     event = %{
       "event" => "job.application.signal.detected",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -170,6 +171,8 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "job_applications.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "application_id" => application["id"],
         "company" => application["company"],

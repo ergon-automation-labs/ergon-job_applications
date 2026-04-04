@@ -19,6 +19,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   Initiates the two-phase artifact generation pipeline.
   """
   def handle_request(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -29,7 +30,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
         case BotArmyJobApplications.ApplicationServer.get(application_id) do
           {:ok, application} ->
-            case resume_store().get(resume_id) do
+            case resume_store().get(tenant_id, resume_id) do
               {:ok, resume} ->
                 # Start JD analysis phase
                 initiate_jd_analysis(application, resume, event_id)
@@ -56,6 +57,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   Receives LLM-generated response with JD tags and initiates resume composition.
   """
   def handle_jd_analysis_response(message) do
+    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     resume_id = source_metadata["resume_id"]
@@ -79,7 +81,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
           case application do
             {:ok, application_data} ->
-              case resume_store().get(resume_id) do
+              case resume_store().get(tenant_id, resume_id) do
                 {:ok, resume} ->
                   # Compose resume for this JD
                   composed = BotArmyJobApplications.ResumeComposer.compose(resume, jd_tags)

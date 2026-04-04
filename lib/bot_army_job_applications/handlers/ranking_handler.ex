@@ -41,6 +41,7 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
   ```
   """
   def handle_rank(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -49,10 +50,10 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
         limit = Map.get(payload, "limit")
         tier_filter = Map.get(payload, "tier")
 
-        case rank_applications(limit, tier_filter) do
+        case rank_applications(limit, tier_filter, tenant_id) do
           {:ok, ranked_apps, total} ->
             Logger.info("Ranked #{length(ranked_apps)} applications, event_id: #{event_id}")
-            publish_ranked(ranked_apps, total, limit, event_id)
+            publish_ranked(ranked_apps, total, limit, event_id, tenant_id, user_id)
 
           {:error, reason} ->
             Logger.error("Failed to rank applications: #{inspect(reason)}")
@@ -78,9 +79,9 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
 
   defp validate_rank_payload(_), do: {:error, "payload must be a map"}
 
-  defp rank_applications(limit, tier_filter) do
+  defp rank_applications(limit, tier_filter, tenant_id) do
     try do
-      applications = ApplicationStore.list()
+      applications = ApplicationStore.list(tenant_id)
       total = length(applications)
 
       # Get ranked list
@@ -130,7 +131,7 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
     end
   end
 
-  defp publish_ranked(applications, total, limit, event_id) do
+  defp publish_ranked(applications, total, limit, event_id, tenant_id, user_id) do
     event = %{
       "event" => "job.application.ranked",
       "event_id" => UUID.uuid4() |> to_string(),
@@ -139,6 +140,8 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "job_applications.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "applications" => applications,
         "total" => total,

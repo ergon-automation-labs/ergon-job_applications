@@ -52,10 +52,11 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
   Queries all applications, builds digest, and publishes to NATS.
   """
   def handle_request(message) do
-    case application_store().list() do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    case application_store().list(tenant_id) do
       {:ok, apps} ->
         digest = build_digest(apps)
-        publish_digest(digest, message["event_id"])
+        publish_digest(digest, message["event_id"], tenant_id, user_id)
 
       {:error, reason} ->
         Logger.error("Digest request failed: #{inspect(reason)}")
@@ -66,7 +67,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
   @doc """
   Publish digest to NATS and GTD inbox.
   """
-  def publish_digest(digest, triggered_by_event_id) do
+  def publish_digest(digest, triggered_by_event_id, tenant_id, user_id) do
     # Publish NATS digest event
     event = %{
       "event" => "job.application.digest.ready",
@@ -76,6 +77,8 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "job_applications.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => digest
     }
 
@@ -88,7 +91,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
 
     # Publish GTD inbox task (if GTD integration enabled)
     if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
-      publish_gtd_digest(digest)
+      publish_gtd_digest(digest, tenant_id, user_id)
     end
   end
 
@@ -191,7 +194,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
 
   defp parse_iso8601(_), do: :error
 
-  defp publish_gtd_digest(digest) do
+  defp publish_gtd_digest(digest, tenant_id, user_id) do
     active = digest["total_active"]
     signals = length(digest["pending_signals"] || [])
     stalled_count = length(digest["stalled"] || [])
@@ -210,6 +213,8 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
       "source_node" => get_node_name(),
       "triggered_by" => "job_applications.bot",
       "schema_version" => "1.0",
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
       "payload" => %{
         "title" => title,
         "context" => "recruiting",
