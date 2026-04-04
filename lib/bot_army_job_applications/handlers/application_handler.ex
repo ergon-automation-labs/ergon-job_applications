@@ -28,7 +28,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   def handle_create(message) do
     %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
-    payload = message["payload"]
+    payload = message["payload"] || %{}
 
     # Enrich payload with listing data if listing_id is provided
     enriched_payload = enrich_payload_from_listing(payload)

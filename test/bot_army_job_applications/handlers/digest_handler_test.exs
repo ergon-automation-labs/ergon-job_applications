@@ -7,7 +7,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
 
   setup do
     # Mock the application store by default
-    stub(BotArmyJobApplications.ApplicationStoreMock, :list, fn -> {:ok, []} end)
+    stub(BotArmyJobApplications.ApplicationStoreMock, :list, fn _tenant_id -> {:ok, []} end)
     :ok
   end
 
@@ -153,7 +153,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
     end
 
     test "handle_request calls store and publishes digest" do
-      expect(BotArmyJobApplications.ApplicationStoreMock, :list, fn ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :list, fn _tenant_id ->
         {:ok, [
           %{
             "id" => "1",
@@ -167,6 +167,8 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
 
       message = %{
         "event" => "job.digest.request",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "event_id" => "test-event-1",
         "payload" => %{}
       }

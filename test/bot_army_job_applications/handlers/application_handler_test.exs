@@ -5,6 +5,8 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
     test "validates required fields: company" do
       message = %{
         "event_id" => "test-event-123",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "payload" => %{
           "role_title" => "Senior Engineer"
         }
@@ -18,6 +20,8 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
     test "validates required fields: role_title" do
       message = %{
         "event_id" => "test-event-123",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "payload" => %{
           "company" => "TechCorp"
         }
@@ -29,7 +33,9 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
 
     test "validates payload presence" do
       message = %{
-        "event_id" => "test-event-123"
+        "event_id" => "test-event-123",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil
       }
 
       result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_create(message)
@@ -41,6 +47,8 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
     test "validates state transition syntax" do
       message = %{
         "event_id" => "test-event-456",
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "payload" => %{
           "to_state" => "drafted"
         }

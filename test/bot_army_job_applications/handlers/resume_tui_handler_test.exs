@@ -10,14 +10,17 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns ok with resume_id on success" do
       resume_id = "test-resume-id-123"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn payload, %{} ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn payload, file_metadata ->
         assert payload["identity"]["name"] == "Jane Doe"
         assert payload["roles"] == []
         assert payload["skills"] == []
+        assert file_metadata["tenant_id"] == "00000000-0000-0000-0000-000000000001"
         {:ok, %{"id" => resume_id, "identity" => %{"name" => "Jane Doe"}}}
       end)
 
       payload = %{
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "identity" => %{"name" => "Jane Doe", "summary" => "Test"},
         "roles" => [],
         "skills" => []
@@ -29,11 +32,13 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     end
 
     test "returns error map when store returns error" do
-      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn _payload, %{} ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn _payload, _file_metadata ->
         {:error, :invalid_data}
       end)
 
       payload = %{
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
+        "user_id" => nil,
         "identity" => %{"name" => "Jane Doe"},
         "roles" => [],
         "skills" => []
@@ -63,13 +68,16 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
   describe "handle_update/1" do
     test "returns ok on success" do
       resume_id = "existing-resume-id"
+      tenant_id = "00000000-0000-0000-0000-000000000001"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn ^resume_id, payload ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn ^tenant_id, ^resume_id, payload ->
         assert payload["identity"]["name"] == "Jane Smith"
         {:ok, %{"id" => resume_id, "identity" => %{"name" => "Jane Smith"}}}
       end)
 
       payload = %{
+        "tenant_id" => tenant_id,
+        "user_id" => nil,
         "resume_id" => resume_id,
         "identity" => %{"name" => "Jane Smith", "summary" => "Updated"},
         "roles" => [],
@@ -83,6 +91,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
 
     test "returns missing resume_id when resume_id key is absent" do
       payload = %{
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
         "identity" => %{"name" => "Jane"},
         "roles" => [],
         "skills" => []
@@ -95,6 +104,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
 
     test "returns missing resume_id when resume_id is empty string" do
       payload = %{
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
         "resume_id" => "",
         "identity" => %{"name" => "Jane"},
         "roles" => [],
@@ -109,11 +119,12 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns error map when store returns error" do
       resume_id = "nonexistent-id"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn ^resume_id, _payload ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn _tenant_id, ^resume_id, _payload ->
         {:error, :not_found}
       end)
 
       payload = %{
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
         "resume_id" => resume_id,
         "identity" => %{"name" => "Jane"},
         "roles" => [],
@@ -128,11 +139,12 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns error with string reason from store" do
       resume_id = "some-id"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn ^resume_id, _payload ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn _tenant_id, ^resume_id, _payload ->
         {:error, "database connection failed"}
       end)
 
       payload = %{
+        "tenant_id" => "00000000-0000-0000-0000-000000000001",
         "resume_id" => resume_id,
         "identity" => %{"name" => "Jane"},
         "roles" => [],
@@ -163,12 +175,13 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
   describe "handle_delete/1" do
     test "returns ok on success" do
       resume_id = "resume-to-delete"
+      tenant_id = "00000000-0000-0000-0000-000000000001"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :delete, fn ^resume_id ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :delete, fn ^tenant_id, ^resume_id ->
         :ok
       end)
 
-      payload = %{"resume_id" => resume_id}
+      payload = %{"tenant_id" => tenant_id, "resume_id" => resume_id}
 
       result = ResumeTuiHandler.handle_delete(payload)
 
@@ -176,7 +189,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     end
 
     test "returns missing resume_id when resume_id key is absent" do
-      payload = %{}
+      payload = %{"tenant_id" => "00000000-0000-0000-0000-000000000001"}
 
       result = ResumeTuiHandler.handle_delete(payload)
 
@@ -184,7 +197,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     end
 
     test "returns missing resume_id when resume_id is empty string" do
-      payload = %{"resume_id" => ""}
+      payload = %{"tenant_id" => "00000000-0000-0000-0000-000000000001", "resume_id" => ""}
 
       result = ResumeTuiHandler.handle_delete(payload)
 
@@ -194,11 +207,11 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns error map when store returns error" do
       resume_id = "nonexistent-id"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :delete, fn ^resume_id ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :delete, fn _tenant_id, ^resume_id ->
         {:error, :not_found}
       end)
 
-      payload = %{"resume_id" => resume_id}
+      payload = %{"tenant_id" => "00000000-0000-0000-0000-000000000001", "resume_id" => resume_id}
 
       result = ResumeTuiHandler.handle_delete(payload)
 
@@ -208,11 +221,11 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns error with string reason from store" do
       resume_id = "some-id"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :delete, fn ^resume_id ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :delete, fn _tenant_id, ^resume_id ->
         {:error, "cascade delete failed"}
       end)
 
-      payload = %{"resume_id" => resume_id}
+      payload = %{"tenant_id" => "00000000-0000-0000-0000-000000000001", "resume_id" => resume_id}
 
       result = ResumeTuiHandler.handle_delete(payload)
 
