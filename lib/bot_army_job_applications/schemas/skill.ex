@@ -25,6 +25,6 @@ defmodule BotArmyJobApplications.Schemas.Skill do
   def changeset(skill, attrs) do
     skill
     |> cast(attrs, [:resume_id, :name, :tags, :proficiency, :years, :tenant_id, :user_id])
-    |> validate_required([:resume_id, :name])
+    |> validate_required([:resume_id, :name, :tenant_id])
   end
 end

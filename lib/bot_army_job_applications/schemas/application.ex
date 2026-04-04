@@ -49,6 +49,6 @@ defmodule BotArmyJobApplications.Schemas.Application do
       :next_action,
       :artifacts
     ])
-    |> validate_required([:company, :role_title, :state])
+    |> validate_required([:company, :role_title, :state, :tenant_id])
   end
 end

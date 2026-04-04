@@ -27,6 +27,6 @@ defmodule BotArmyJobApplications.Schemas.ResumeRole do
   def changeset(role, attrs) do
     role
     |> cast(attrs, [:resume_id, :title, :company, :start_date, :end_date, :framing_profiles, :sort_order, :tenant_id, :user_id])
-    |> validate_required([:resume_id, :title, :company])
+    |> validate_required([:resume_id, :title, :company, :tenant_id])
   end
 end

@@ -24,6 +24,6 @@ defmodule BotArmyJobApplications.Schemas.Resume do
   def changeset(resume, attrs) do
     resume
     |> cast(attrs, [:identity, :metadata, :source_file_path, :original_filename, :tenant_id, :user_id])
-    |> validate_required([:identity])
+    |> validate_required([:identity, :tenant_id])
   end
 end

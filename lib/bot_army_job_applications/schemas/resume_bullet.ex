@@ -27,6 +27,6 @@ defmodule BotArmyJobApplications.Schemas.ResumeBullet do
   def changeset(bullet, attrs) do
     bullet
     |> cast(attrs, [:role_id, :text, :alt_phrasings, :tags, :metrics, :strength, :sort_order, :tenant_id, :user_id])
-    |> validate_required([:role_id, :text])
+    |> validate_required([:role_id, :text, :tenant_id])
   end
 end

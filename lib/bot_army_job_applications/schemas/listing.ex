@@ -55,6 +55,6 @@ defmodule BotArmyJobApplications.Schemas.Listing do
       :recommendation_reason,
       :gtd_pushed
     ])
-    |> validate_required([:company, :role_title])
+    |> validate_required([:company, :role_title, :tenant_id])
   end
 end

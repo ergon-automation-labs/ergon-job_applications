@@ -1,4 +1,6 @@
-.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs logs-all
+SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
+
+.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -9,7 +11,8 @@ help:
 	@echo "  make test-docker     - Run tests in Docker"
 	@echo "  make start           - Start all services (docker compose up -d)"
 	@echo "  make stop            - Stop all services"
-	@echo "  make logs            - Watch service logs"
+	@echo "  make logs            - Watch Docker service logs (compose)"
+	@echo "  make logs-server     - Tail deployed server log with grc (/var/log/bot_army/job_applications.log)"
 	@echo ""
 	@echo "Setup commands (personal development):"
 	@echo "  make setup           - Set up project (deps.get + git hooks + database)"
@@ -143,6 +146,9 @@ logs:
 
 logs-all:
 	docker compose logs -f
+
+logs-server:
+	@$(SCRIPTS_DIRECTORY)/tail_bot_log.sh
 
 # ============================================================================
 # Release & Deployment (personal/internal only)
