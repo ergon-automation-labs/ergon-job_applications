@@ -18,13 +18,15 @@ defmodule BotArmyJobApplications.Schemas.ResumeRole do
     field :framing_profiles, :map
     field :sort_order, :integer, default: 0
 
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
     timestamps()
   end
 
   @doc false
   def changeset(role, attrs) do
     role
-    |> cast(attrs, [:resume_id, :title, :company, :start_date, :end_date, :framing_profiles, :sort_order])
+    |> cast(attrs, [:resume_id, :title, :company, :start_date, :end_date, :framing_profiles, :sort_order, :tenant_id, :user_id])
     |> validate_required([:resume_id, :title, :company])
   end
 end

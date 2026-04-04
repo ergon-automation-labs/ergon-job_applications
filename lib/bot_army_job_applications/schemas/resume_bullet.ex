@@ -18,13 +18,15 @@ defmodule BotArmyJobApplications.Schemas.ResumeBullet do
     field :strength, :string
     field :sort_order, :integer, default: 0
 
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
     timestamps()
   end
 
   @doc false
   def changeset(bullet, attrs) do
     bullet
-    |> cast(attrs, [:role_id, :text, :alt_phrasings, :tags, :metrics, :strength, :sort_order])
+    |> cast(attrs, [:role_id, :text, :alt_phrasings, :tags, :metrics, :strength, :sort_order, :tenant_id, :user_id])
     |> validate_required([:role_id, :text])
   end
 end

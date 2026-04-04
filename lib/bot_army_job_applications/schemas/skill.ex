@@ -16,13 +16,15 @@ defmodule BotArmyJobApplications.Schemas.Skill do
     field :proficiency, :string
     field :years, :integer
 
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
     timestamps()
   end
 
   @doc false
   def changeset(skill, attrs) do
     skill
-    |> cast(attrs, [:resume_id, :name, :tags, :proficiency, :years])
+    |> cast(attrs, [:resume_id, :name, :tags, :proficiency, :years, :tenant_id, :user_id])
     |> validate_required([:resume_id, :name])
   end
 end

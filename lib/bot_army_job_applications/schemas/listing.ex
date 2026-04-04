@@ -28,6 +28,8 @@ defmodule BotArmyJobApplications.Schemas.Listing do
     field :recommendation_reason, :string
     field :gtd_pushed, :boolean, default: false
 
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
     timestamps()
   end
 

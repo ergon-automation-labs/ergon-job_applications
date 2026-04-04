@@ -25,6 +25,8 @@ defmodule BotArmyJobApplications.Schemas.Application do
     field :next_action, :string
     field :artifacts, :map
 
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
     timestamps()
   end
 

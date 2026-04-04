@@ -15,13 +15,15 @@ defmodule BotArmyJobApplications.Schemas.Resume do
     field :source_file_path, :string
     field :original_filename, :string
 
+    field :tenant_id, :binary_id
+    field :user_id, :binary_id
     timestamps()
   end
 
   @doc false
   def changeset(resume, attrs) do
     resume
-    |> cast(attrs, [:identity, :metadata, :source_file_path, :original_filename])
+    |> cast(attrs, [:identity, :metadata, :source_file_path, :original_filename, :tenant_id, :user_id])
     |> validate_required([:identity])
   end
 end
