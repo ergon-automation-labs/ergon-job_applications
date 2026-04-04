@@ -26,15 +26,22 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   Creates a new job application and starts the ApplicationServer.
   """
   def handle_create(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
     # Enrich payload with listing data if listing_id is provided
     enriched_payload = enrich_payload_from_listing(payload)
 
-    case validate_create_payload(enriched_payload) do
+    # Stamp payload with tenant/user context
+    stamped_payload = Map.merge(enriched_payload, %{
+      "tenant_id" => tenant_id,
+      "user_id" => user_id
+    })
+
+    case validate_create_payload(stamped_payload) do
       :ok ->
-        case create_application(payload) do
+        case create_application(stamped_payload) do
           {:ok, application} ->
             # Start ApplicationServer for this application
             BotArmyJobApplications.ApplicationSupervisor.start_child(application["id"])
@@ -60,6 +67,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   then clears the pending signal.
   """
   def handle_confirm_signal(message) do
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"]
     event_id = message["event_id"]
 
@@ -67,7 +75,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       :ok ->
         application_id = payload["application_id"]
 
-        case application_store().get(application_id) do
+        case application_store().get(tenant_id, application_id) do
           {:ok, application} ->
             pending_signal = application["pending_signal"]
 
@@ -79,7 +87,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
               case BotArmyJobApplications.ApplicationServer.transition(application_id, to_state, metadata) do
                 {:ok, _updated_app} ->
                   # Clear the pending signal
-                  case application_store().update(application_id, %{"pending_signal" => nil}) do
+                  case application_store().update(tenant_id, application_id, %{"pending_signal" => nil}) do
                     {:ok, updated_app} ->
                       Logger.info("Confirmed email signal for application: #{application_id}, transitioned to #{to_state}")
                       publish_signal_cleared(updated_app, event_id)

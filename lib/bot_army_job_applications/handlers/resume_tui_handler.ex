@@ -19,6 +19,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
 
   Payload:
     {
+      "tenant_id": "uuid",
+      "user_id": "uuid" (optional),
       "identity": {
         "name": "...",
         "summary": "...",
@@ -36,13 +38,24 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
   Returns: %{"ok" => true, "resume_id" => id} or %{"ok" => false, "error" => reason}
   """
   def handle_create(payload) when is_map(payload) do
-    case resume_store().create_from_parsed(payload, %{}) do
-      {:ok, resume} ->
-        %{"ok" => true, "resume_id" => resume["id"]}
+    tenant_id = payload["tenant_id"]
 
-      {:error, reason} ->
-        Logger.warning("ResumeTuiHandler.handle_create failed: #{inspect(reason)}")
-        %{"ok" => false, "error" => to_string(reason)}
+    if not is_binary(tenant_id) or tenant_id == "" do
+      %{"ok" => false, "error" => "missing tenant_id"}
+    else
+      file_metadata = %{
+        "tenant_id" => tenant_id,
+        "user_id" => payload["user_id"]
+      }
+
+      case resume_store().create_from_parsed(payload, file_metadata) do
+        {:ok, resume} ->
+          %{"ok" => true, "resume_id" => resume["id"]}
+
+        {:error, reason} ->
+          Logger.warning("ResumeTuiHandler.handle_create failed: #{inspect(reason)}")
+          %{"ok" => false, "error" => to_string(reason)}
+      end
     end
   end
 
@@ -51,23 +64,28 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
   @doc """
   Update an existing resume, replacing all identity, roles and skills.
 
-  Payload: same as create, plus top-level "resume_id": "uuid"
+  Payload: same as create, plus top-level "resume_id": "uuid" and "tenant_id": "uuid"
 
   Returns: %{"ok" => true} or %{"ok" => false, "error" => reason}
   """
   def handle_update(payload) when is_map(payload) do
+    tenant_id = payload["tenant_id"]
     resume_id = payload["resume_id"]
 
-    if not is_binary(resume_id) or resume_id == "" do
-      %{"ok" => false, "error" => "missing resume_id"}
+    if not is_binary(tenant_id) or tenant_id == "" do
+      %{"ok" => false, "error" => "missing tenant_id"}
     else
-      case resume_store().replace_full(resume_id, payload) do
-        {:ok, _resume} ->
-          %{"ok" => true}
+      if not is_binary(resume_id) or resume_id == "" do
+        %{"ok" => false, "error" => "missing resume_id"}
+      else
+        case resume_store().replace_full(tenant_id, resume_id, payload) do
+          {:ok, _resume} ->
+            %{"ok" => true}
 
-        {:error, reason} ->
-          Logger.warning("ResumeTuiHandler.handle_update failed for #{resume_id}: #{inspect(reason)}")
-          %{"ok" => false, "error" => to_string(reason)}
+          {:error, reason} ->
+            Logger.warning("ResumeTuiHandler.handle_update failed for #{resume_id}: #{inspect(reason)}")
+            %{"ok" => false, "error" => to_string(reason)}
+        end
       end
     end
   end
@@ -77,24 +95,29 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandler do
   @doc """
   Delete a resume and all related data.
 
-  Payload: { "resume_id": "uuid" }
+  Payload: { "tenant_id": "uuid", "resume_id": "uuid" }
 
   Returns: %{"ok" => true} or %{"ok" => false, "error" => reason}
   """
   def handle_delete(payload) when is_map(payload) do
+    tenant_id = payload["tenant_id"]
     resume_id = payload["resume_id"]
 
-    if not is_binary(resume_id) or resume_id == "" do
-      %{"ok" => false, "error" => "missing resume_id"}
+    if not is_binary(tenant_id) or tenant_id == "" do
+      %{"ok" => false, "error" => "missing tenant_id"}
     else
-      case resume_store().delete(resume_id) do
-        :ok ->
-          Logger.info("Deleted resume via TUI: #{resume_id}")
-          %{"ok" => true}
+      if not is_binary(resume_id) or resume_id == "" do
+        %{"ok" => false, "error" => "missing resume_id"}
+      else
+        case resume_store().delete(tenant_id, resume_id) do
+          :ok ->
+            Logger.info("Deleted resume via TUI: #{resume_id}")
+            %{"ok" => true}
 
-        {:error, reason} ->
-          Logger.warning("ResumeTuiHandler.handle_delete failed for #{resume_id}: #{inspect(reason)}")
-          %{"ok" => false, "error" => to_string(reason)}
+          {:error, reason} ->
+            Logger.warning("ResumeTuiHandler.handle_delete failed for #{resume_id}: #{inspect(reason)}")
+            %{"ok" => false, "error" => to_string(reason)}
+        end
       end
     end
   end

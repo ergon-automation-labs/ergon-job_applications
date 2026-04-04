@@ -6,18 +6,18 @@ defmodule BotArmyJobApplications.ResumeStoreBehaviour do
   """
 
   @callback create(payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback update(resume_id :: String.t(), payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback get(resume_id :: String.t()) :: {:ok, map()} | {:error, atom()}
-  @callback list() :: {:ok, list(map())}
+  @callback update(tenant_id :: String.t(), resume_id :: String.t(), payload :: map()) :: {:ok, map()} | {:error, atom()}
+  @callback get(tenant_id :: String.t(), resume_id :: String.t()) :: {:ok, map()} | {:error, atom()}
+  @callback list(tenant_id :: String.t()) :: {:ok, list(map())}
   @callback clear() :: :ok
 
   # TUI management callbacks
   @callback create_from_parsed(parsed_data :: map(), file_metadata :: map()) ::
     {:ok, map()} | {:error, atom() | String.t()}
 
-  @callback replace_full(resume_id :: String.t(), parsed_data :: map()) ::
+  @callback replace_full(tenant_id :: String.t(), resume_id :: String.t(), parsed_data :: map()) ::
     {:ok, map()} | {:error, atom() | String.t()}
 
-  @callback delete(resume_id :: String.t()) ::
+  @callback delete(tenant_id :: String.t(), resume_id :: String.t()) ::
     :ok | {:error, atom() | String.t()}
 end

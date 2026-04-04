@@ -6,9 +6,9 @@ defmodule BotArmyJobApplications.ApplicationStoreBehaviour do
   """
 
   @callback create(payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback get(application_id :: binary()) :: {:ok, map()} | {:error, atom()}
-  @callback update(application_id :: binary(), payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback delete(application_id :: binary()) :: :ok | {:error, atom()}
-  @callback list() :: {:ok, list(map())}
+  @callback get(tenant_id :: binary(), application_id :: binary()) :: {:ok, map()} | {:error, atom()}
+  @callback update(tenant_id :: binary(), application_id :: binary(), payload :: map()) :: {:ok, map()} | {:error, atom()}
+  @callback delete(tenant_id :: binary(), application_id :: binary()) :: :ok | {:error, atom()}
+  @callback list(tenant_id :: binary()) :: {:ok, list(map())}
   @callback clear() :: :ok
 end

@@ -6,9 +6,9 @@ defmodule BotArmyJobApplications.ListingStoreBehaviour do
   """
 
   @callback create(payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback update(listing_id :: String.t(), payload :: map()) :: {:ok, map()} | {:error, atom()}
-  @callback get(listing_id :: String.t()) :: {:ok, map()} | {:error, atom()}
-  @callback get_by_dedup_hash(dedup_hash :: String.t()) :: {:ok, map()} | {:error, :not_found}
-  @callback list(opts :: keyword()) :: {:ok, list(map())}
+  @callback update(tenant_id :: String.t(), listing_id :: String.t(), payload :: map()) :: {:ok, map()} | {:error, atom()}
+  @callback get(tenant_id :: String.t(), listing_id :: String.t()) :: {:ok, map()} | {:error, atom()}
+  @callback get_by_dedup_hash(tenant_id :: String.t(), dedup_hash :: String.t()) :: {:ok, map()} | {:error, :not_found}
+  @callback list(tenant_id :: String.t(), opts :: keyword()) :: {:ok, list(map())}
   @callback clear() :: :ok
 end

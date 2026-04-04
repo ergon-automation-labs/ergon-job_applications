@@ -23,23 +23,23 @@ defmodule BotArmyJobApplications.ApplicationStore do
   end
 
   @impl BotArmyJobApplications.ApplicationStoreBehaviour
-  def update(application_id, payload) when is_binary(application_id) and is_map(payload) do
-    GenServer.call(@server, {:update, application_id, payload})
+  def update(tenant_id, application_id, payload) when is_binary(tenant_id) and is_binary(application_id) and is_map(payload) do
+    GenServer.call(@server, {:update, tenant_id, application_id, payload})
   end
 
   @impl BotArmyJobApplications.ApplicationStoreBehaviour
-  def get(application_id) when is_binary(application_id) do
-    GenServer.call(@server, {:get, application_id})
+  def get(tenant_id, application_id) when is_binary(tenant_id) and is_binary(application_id) do
+    GenServer.call(@server, {:get, tenant_id, application_id})
   end
 
   @impl BotArmyJobApplications.ApplicationStoreBehaviour
-  def delete(application_id) when is_binary(application_id) do
-    GenServer.call(@server, {:delete, application_id})
+  def delete(tenant_id, application_id) when is_binary(tenant_id) and is_binary(application_id) do
+    GenServer.call(@server, {:delete, tenant_id, application_id})
   end
 
   @impl BotArmyJobApplications.ApplicationStoreBehaviour
-  def list do
-    GenServer.call(@server, :list)
+  def list(tenant_id) when is_binary(tenant_id) do
+    GenServer.call(@server, {:list, tenant_id})
   end
 
   @impl BotArmyJobApplications.ApplicationStoreBehaviour
@@ -72,6 +72,8 @@ defmodule BotArmyJobApplications.ApplicationStore do
     changeset = BotArmyJobApplications.Schemas.Application.changeset(
       %BotArmyJobApplications.Schemas.Application{id: application_id},
       %{
+        "tenant_id" => payload["tenant_id"],
+        "user_id" => Map.get(payload, "user_id"),
         "listing_id" => payload["listing_id"],
         "company" => payload["company"],
         "role_title" => payload["role_title"],
@@ -103,16 +105,19 @@ defmodule BotArmyJobApplications.ApplicationStore do
   end
 
   @impl true
-  def handle_call({:update, application_id, payload}, _from, state) do
+  def handle_call({:update, tenant_id, application_id, payload}, _from, state) do
     case Map.get(state, application_id) do
       nil ->
         {:reply, {:error, :not_found}, state}
 
-      _application ->
-        application_uuid = Ecto.UUID.cast!(application_id)
-        db_application = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_uuid)
+      application ->
+        if application["tenant_id"] != tenant_id do
+          {:reply, {:error, :not_found}, state}
+        else
+          application_uuid = Ecto.UUID.cast!(application_id)
+          db_application = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_uuid)
 
-        if db_application do
+          if db_application do
           changeset = BotArmyJobApplications.Schemas.Application.changeset(
             db_application,
             %{
@@ -133,17 +138,31 @@ defmodule BotArmyJobApplications.ApplicationStore do
             }
           )
 
-          case BotArmyJobApplications.Repo.update(changeset) do
-            {:ok, updated_db_application} ->
-              updated_application = schema_to_map(updated_db_application)
-              new_state = Map.put(state, application_id, updated_application)
-              Logger.info("Updated application in database: #{application_id}")
-              {:reply, {:ok, updated_application}, new_state}
+            case BotArmyJobApplications.Repo.update(changeset) do
+              {:ok, updated_db_application} ->
+                updated_application = schema_to_map(updated_db_application)
+                new_state = Map.put(state, application_id, updated_application)
+                Logger.info("Updated application in database: #{application_id}")
+                {:reply, {:ok, updated_application}, new_state}
 
-            {:error, changeset} ->
-              Logger.error("Failed to update application: #{inspect(changeset.errors)}")
-              {:reply, {:error, :database_error}, state}
+              {:error, changeset} ->
+                Logger.error("Failed to update application: #{inspect(changeset.errors)}")
+                {:reply, {:error, :database_error}, state}
+            end
+          else
+            {:reply, {:error, :not_found}, state}
           end
+        end
+    end
+  end
+
+  @impl true
+  def handle_call({:get, tenant_id, application_id}, _from, state) do
+    case Map.get(state, application_id) do
+      nil -> {:reply, {:error, :not_found}, state}
+      application ->
+        if application["tenant_id"] == tenant_id do
+          {:reply, {:ok, application}, state}
         else
           {:reply, {:error, :not_found}, state}
         end
@@ -151,43 +170,41 @@ defmodule BotArmyJobApplications.ApplicationStore do
   end
 
   @impl true
-  def handle_call({:get, application_id}, _from, state) do
-    case Map.get(state, application_id) do
-      nil -> {:reply, {:error, :not_found}, state}
-      application -> {:reply, {:ok, application}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:delete, application_id}, _from, state) do
+  def handle_call({:delete, tenant_id, application_id}, _from, state) do
     case Map.get(state, application_id) do
       nil ->
         {:reply, {:error, :not_found}, state}
 
-      _ ->
-        application_uuid = Ecto.UUID.cast!(application_id)
-        db_application = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_uuid)
-
-        if db_application do
-          case BotArmyJobApplications.Repo.delete(db_application) do
-            {:ok, _} ->
-              new_state = Map.delete(state, application_id)
-              Logger.info("Deleted application from database: #{application_id}")
-              {:reply, :ok, new_state}
-
-            {:error, changeset} ->
-              Logger.error("Failed to delete application: #{inspect(changeset.errors)}")
-              {:reply, {:error, :database_error}, state}
-          end
-        else
+      application ->
+        if application["tenant_id"] != tenant_id do
           {:reply, {:error, :not_found}, state}
+        else
+          application_uuid = Ecto.UUID.cast!(application_id)
+          db_application = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_uuid)
+
+          if db_application do
+            case BotArmyJobApplications.Repo.delete(db_application) do
+              {:ok, _} ->
+                new_state = Map.delete(state, application_id)
+                Logger.info("Deleted application from database: #{application_id}")
+                {:reply, :ok, new_state}
+
+              {:error, changeset} ->
+                Logger.error("Failed to delete application: #{inspect(changeset.errors)}")
+                {:reply, {:error, :database_error}, state}
+            end
+          else
+            {:reply, {:error, :not_found}, state}
+          end
         end
     end
   end
 
   @impl true
-  def handle_call(:list, _from, state) do
-    applications = state |> Map.values()
+  def handle_call({:list, tenant_id}, _from, state) do
+    applications = state
+      |> Map.values()
+      |> Enum.filter(&(&1["tenant_id"] == tenant_id))
     {:reply, {:ok, applications}, state}
   end
 
@@ -201,6 +218,8 @@ defmodule BotArmyJobApplications.ApplicationStore do
   defp schema_to_map(%BotArmyJobApplications.Schemas.Application{} = application) do
     %{
       "id" => application.id |> to_string(),
+      "tenant_id" => application.tenant_id |> to_string(),
+      "user_id" => if(application.user_id, do: application.user_id |> to_string(), else: nil),
       "listing_id" => application.listing_id,
       "company" => application.company,
       "role_title" => application.role_title,

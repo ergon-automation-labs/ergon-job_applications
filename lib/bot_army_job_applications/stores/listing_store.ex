@@ -19,20 +19,20 @@ defmodule BotArmyJobApplications.ListingStore do
     GenServer.call(@server, {:create, payload})
   end
 
-  def update(listing_id, payload) when is_binary(listing_id) and is_map(payload) do
-    GenServer.call(@server, {:update, listing_id, payload})
+  def update(tenant_id, listing_id, payload) when is_binary(tenant_id) and is_binary(listing_id) and is_map(payload) do
+    GenServer.call(@server, {:update, tenant_id, listing_id, payload})
   end
 
-  def get(listing_id) when is_binary(listing_id) do
-    GenServer.call(@server, {:get, listing_id})
+  def get(tenant_id, listing_id) when is_binary(tenant_id) and is_binary(listing_id) do
+    GenServer.call(@server, {:get, tenant_id, listing_id})
   end
 
-  def get_by_dedup_hash(dedup_hash) when is_binary(dedup_hash) do
-    GenServer.call(@server, {:get_by_dedup_hash, dedup_hash})
+  def get_by_dedup_hash(tenant_id, dedup_hash) when is_binary(tenant_id) and is_binary(dedup_hash) do
+    GenServer.call(@server, {:get_by_dedup_hash, tenant_id, dedup_hash})
   end
 
-  def list(opts \\ []) do
-    GenServer.call(@server, {:list, opts})
+  def list(tenant_id, opts \\ []) when is_binary(tenant_id) do
+    GenServer.call(@server, {:list, tenant_id, opts})
   end
 
   def clear do
@@ -66,6 +66,8 @@ defmodule BotArmyJobApplications.ListingStore do
     changeset = BotArmyJobApplications.Schemas.Listing.changeset(
       %BotArmyJobApplications.Schemas.Listing{id: listing_id},
       %{
+        "tenant_id" => payload["tenant_id"],
+        "user_id" => Map.get(payload, "user_id"),
         "source" => Map.get(payload, "source"),
         "source_url" => Map.get(payload, "source_url"),
         "company" => payload["company"],
@@ -97,16 +99,19 @@ defmodule BotArmyJobApplications.ListingStore do
   end
 
   @impl true
-  def handle_call({:update, listing_id, payload}, _from, state) do
+  def handle_call({:update, tenant_id, listing_id, payload}, _from, state) do
     case Map.get(state, listing_id) do
       nil ->
         {:reply, {:error, :not_found}, state}
 
-      _listing ->
-        listing_uuid = Ecto.UUID.cast!(listing_id)
-        db_listing = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Listing, listing_uuid)
+      listing ->
+        if listing["tenant_id"] != tenant_id do
+          {:reply, {:error, :not_found}, state}
+        else
+          listing_uuid = Ecto.UUID.cast!(listing_id)
+          db_listing = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Listing, listing_uuid)
 
-        if db_listing do
+          if db_listing do
           changeset = BotArmyJobApplications.Schemas.Listing.changeset(
             db_listing,
             %{
@@ -130,17 +135,31 @@ defmodule BotArmyJobApplications.ListingStore do
             }
           )
 
-          case BotArmyJobApplications.Repo.update(changeset) do
-            {:ok, updated_db_listing} ->
-              updated_listing = schema_to_map(updated_db_listing)
-              new_state = Map.put(state, listing_id, updated_listing)
-              Logger.info("Updated listing in database: #{listing_id}")
-              {:reply, {:ok, updated_listing}, new_state}
+            case BotArmyJobApplications.Repo.update(changeset) do
+              {:ok, updated_db_listing} ->
+                updated_listing = schema_to_map(updated_db_listing)
+                new_state = Map.put(state, listing_id, updated_listing)
+                Logger.info("Updated listing in database: #{listing_id}")
+                {:reply, {:ok, updated_listing}, new_state}
 
-            {:error, changeset} ->
-              Logger.error("Failed to update listing: #{inspect(changeset.errors)}")
-              {:reply, {:error, :database_error}, state}
+              {:error, changeset} ->
+                Logger.error("Failed to update listing: #{inspect(changeset.errors)}")
+                {:reply, {:error, :database_error}, state}
+            end
+          else
+            {:reply, {:error, :not_found}, state}
           end
+        end
+    end
+  end
+
+  @impl true
+  def handle_call({:get, tenant_id, listing_id}, _from, state) do
+    case Map.get(state, listing_id) do
+      nil -> {:reply, {:error, :not_found}, state}
+      listing ->
+        if listing["tenant_id"] == tenant_id do
+          {:reply, {:ok, listing}, state}
         else
           {:reply, {:error, :not_found}, state}
         end
@@ -148,26 +167,25 @@ defmodule BotArmyJobApplications.ListingStore do
   end
 
   @impl true
-  def handle_call({:get, listing_id}, _from, state) do
-    case Map.get(state, listing_id) do
-      nil -> {:reply, {:error, :not_found}, state}
-      listing -> {:reply, {:ok, listing}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:get_by_dedup_hash, dedup_hash}, _from, state) do
+  def handle_call({:get_by_dedup_hash, tenant_id, dedup_hash}, _from, state) do
     result =
       case BotArmyJobApplications.Repo.get_by(BotArmyJobApplications.Schemas.Listing, dedup_hash: dedup_hash) do
         nil -> {:error, :not_found}
-        listing -> {:ok, schema_to_map(listing)}
+        listing ->
+          if schema_to_map(listing)["tenant_id"] == tenant_id do
+            {:ok, schema_to_map(listing)}
+          else
+            {:error, :not_found}
+          end
       end
     {:reply, result, state}
   end
 
   @impl true
-  def handle_call({:list, opts}, _from, state) do
-    listings = state |> Map.values()
+  def handle_call({:list, tenant_id, opts}, _from, state) do
+    listings = state
+      |> Map.values()
+      |> Enum.filter(&(&1["tenant_id"] == tenant_id))
 
     # Apply filters if provided
     filtered = case Keyword.get(opts, :status) do
@@ -188,6 +206,8 @@ defmodule BotArmyJobApplications.ListingStore do
   defp schema_to_map(%BotArmyJobApplications.Schemas.Listing{} = listing) do
     %{
       "id" => listing.id |> to_string(),
+      "tenant_id" => listing.tenant_id |> to_string(),
+      "user_id" => if(listing.user_id, do: listing.user_id |> to_string(), else: nil),
       "source" => listing.source,
       "source_url" => listing.source_url,
       "company" => listing.company,
