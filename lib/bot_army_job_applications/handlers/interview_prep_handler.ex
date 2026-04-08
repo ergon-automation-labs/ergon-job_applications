@@ -34,7 +34,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
   def handle_request(message, reply_to \\ nil, conn \\ nil)
 
   def handle_request(message, _reply_to, _conn) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     application_id = payload["application_id"]
 

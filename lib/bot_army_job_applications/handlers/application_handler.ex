@@ -67,7 +67,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   then clears the pending signal.
   """
   def handle_confirm_signal(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"]
     event_id = message["event_id"]
 
