@@ -46,7 +46,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Creates application and starts ApplicationServer; publishes snapshot.
   """
   def handle_create(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     # Check if this is a listing_id-based create (from listings view)
     listing_id = trim(payload["listing_id"])
