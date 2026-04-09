@@ -74,83 +74,18 @@ pipeline {
       steps {
         sh '''
           echo "==============================================="
-          echo "Syncing job boards to Salt pillar"
+          echo "Discovering job boards and syncing to Salt pillar"
           echo "==============================================="
-          echo "NOTE: Board discovery task hangs - skipping for now"
-          echo "Using existing boards from pillar configuration"
-          exit 0
 
-          # TODO: Debug board discovery hanging (investigate :httpc timeout issue)
-          # Existing code below (disabled):
-
-          TMP_ROOT="${WORKSPACE_TMP_ROOT:-/tmp/bot_army}"
-          ERGON_TOP_DIR="${TMP_ROOT}/ergon_top"
-          ERGON_TOP_URL="${ERGON_TOP_URL:-https://github.com/ergon-automation-labs/ergon_top_directory.git}"
-          ERGON_TOP_BRANCH="${ERGON_TOP_BRANCH:-main}"
-          INFRA_REPO_DIR="${TMP_ROOT}/bot_army_infra"
-          INFRA_REPO_URL="${INFRA_REPO_URL:-https://github.com/ergon-automation-labs/ergon-infra.git}"
-          INFRA_REPO_BRANCH="${INFRA_REPO_BRANCH:-main}"
-
-          mkdir -p "${TMP_ROOT}" 2>/dev/null || true
-
-          # Clone or update fresh ergon_top_directory (for scripts)
-          if git -C "${ERGON_TOP_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            echo "Updating ergon_top_directory..."
-            git -C "${ERGON_TOP_DIR}" fetch origin "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${ERGON_TOP_DIR}" checkout "${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${ERGON_TOP_DIR}" reset --hard "origin/${ERGON_TOP_BRANCH}" >/dev/null 2>&1 || true
-          else
-            echo "Cloning ergon_top_directory (for scripts)..."
-            rm -rf "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
-            git clone --depth 1 --branch "${ERGON_TOP_BRANCH}" "${ERGON_TOP_URL}" "${ERGON_TOP_DIR}" >/dev/null 2>&1 || true
-          fi
-
-          # Clone or update bot_army_infra (for pillar updates)
-          if git -C "${INFRA_REPO_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            echo "Updating bot_army_infra..."
-            git -C "${INFRA_REPO_DIR}" fetch origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${INFRA_REPO_DIR}" checkout "${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-            git -C "${INFRA_REPO_DIR}" reset --hard "origin/${INFRA_REPO_BRANCH}" >/dev/null 2>&1 || true
-          else
-            echo "Cloning bot_army_infra..."
-            rm -rf "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
-            git clone --depth 1 --branch "${INFRA_REPO_BRANCH}" "${INFRA_REPO_URL}" "${INFRA_REPO_DIR}" >/dev/null 2>&1 || true
-          fi
-
-          # Copy infra repo to Jenkins workspace as sibling for mix task discovery
-          mkdir -p ../bot_army_infra 2>/dev/null || true
-          if [ ! -d "../bot_army_infra/.git" ]; then
-            cp -r "${INFRA_REPO_DIR}" ../bot_army_infra || true
-          fi
-
-          # Discover boards and update pillar (Jenkins workspace + ergon_top scripts)
-          echo "Discovering active job boards..."
-          bash "${ERGON_TOP_DIR}/scripts/mise-exec.sh" mix job_applications.sync_boards_to_salt || {
+          # Run board discovery from job_applications workspace (has companies.yaml and mix.exs)
+          # The sync_boards_to_salt task clones bot_army_infra to /tmp and pushes directly
+          source ~/.zshrc || true
+          mix job_applications.sync_boards_to_salt || {
             EXIT_CODE=$?
-            echo "⚠️  Board sync failed (exit code: $EXIT_CODE), using existing boards"
-            exit 0
+            echo "⚠️  Board sync failed (exit code: $EXIT_CODE)"
+            exit 1
           }
 
-          # Copy updated pillar back to /tmp/bot_army/bot_army_infra and push
-          if [ -f "../bot_army_infra/salt/pillar/job_applications.sls" ]; then
-            cp "../bot_army_infra/salt/pillar/job_applications.sls" "${INFRA_REPO_DIR}/salt/pillar/job_applications.sls"
-          fi
-
-          cd "${INFRA_REPO_DIR}"
-          if git diff --quiet salt/pillar/job_applications.sls 2>/dev/null; then
-            echo "✓ No board changes detected"
-          else
-            echo "Board configuration changed, committing and pushing..."
-            git add salt/pillar/job_applications.sls
-            git commit -m "Auto-sync: update job board configuration from job_applications discovery" >/dev/null 2>&1 || true
-            if git push origin "${INFRA_REPO_BRANCH}" >/dev/null 2>&1; then
-              echo "✓ Pushed board changes to bot_army_infra"
-            else
-              echo "⚠️  Push to bot_army_infra failed (non-blocking)"
-            fi
-          fi
-
-          cd "${WORKSPACE}"
           echo "✓ Board sync complete"
         '''
       }
