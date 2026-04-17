@@ -130,6 +130,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   def handle_continue(:connect, state) do
     case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5000) do
       {:ok, conn} ->
+        BotArmyRuntime.NATS.Connection.subscribe_to_status()
         Logger.info("Connected to NATS, subscribing to job applications topics")
 
         subscriptions =
@@ -217,7 +218,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.application.get", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.application.get", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return application by id for LiveView detail page
     response =
@@ -227,6 +231,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             {:ok, app} -> Jason.encode!(%{"ok" => true, "application" => app})
             {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "not_found"})
           end
+
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "missing application_id"})
       end
@@ -239,48 +244,64 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.listings.list", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.listings.list", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return paginated list of listings (offset/limit support)
     # Supports sort_by parameter: "date" (newest first), "company" (alphabetical), "score" (recommendation)
-    {offset, sort_by} = case Jason.decode(body) do
-      {:ok, payload} when is_map(payload) ->
-        off = case payload["offset"] do
-          o when is_integer(o) -> max(0, o)
-          _ -> 0
-        end
-        sort = case payload["sort_by"] do
-          s when is_binary(s) -> s
-          _ -> "date"
-        end
-        {off, sort}
-      _ -> {0, "date"}
-    end
+    {offset, sort_by} =
+      case Jason.decode(body) do
+        {:ok, payload} when is_map(payload) ->
+          off =
+            case payload["offset"] do
+              o when is_integer(o) -> max(0, o)
+              _ -> 0
+            end
+
+          sort =
+            case payload["sort_by"] do
+              s when is_binary(s) -> s
+              _ -> "date"
+            end
+
+          {off, sort}
+
+        _ ->
+          {0, "date"}
+      end
 
     response =
       case listing_store().list([]) do
         {:ok, listings} ->
           # Sort listings based on requested sort_by parameter
-          sorted = case sort_by do
-            "date" ->
-              # Newest first (inserted_at descending)
-              Enum.sort_by(listings, &(&1["inserted_at"] || ""), :desc)
-            "company" ->
-              # Alphabetical by company name
-              Enum.sort_by(listings, &(&1["company"] || ""))
-            "score" ->
-              # Recommendation score descending (highest first)
-              Enum.sort_by(listings, &(-((&1["recommendation_score"] || 0))), :asc)
-            _ ->
-              # Default to date (newest first)
-              Enum.sort_by(listings, &(&1["inserted_at"] || ""), :desc)
-          end
+          sorted =
+            case sort_by do
+              "date" ->
+                # Newest first (inserted_at descending)
+                Enum.sort_by(listings, &(&1["inserted_at"] || ""), :desc)
+
+              "company" ->
+                # Alphabetical by company name
+                Enum.sort_by(listings, &(&1["company"] || ""))
+
+              "score" ->
+                # Recommendation score descending (highest first)
+                Enum.sort_by(listings, &(-(&1["recommendation_score"] || 0)), :asc)
+
+              _ ->
+                # Default to date (newest first)
+                Enum.sort_by(listings, &(&1["inserted_at"] || ""), :desc)
+            end
+
           total = length(sorted)
           limit = 100
           # Apply offset and limit
           paginated = sorted |> Enum.drop(offset) |> Enum.take(limit)
           # Remove jd_text from each listing to reduce payload size
           stripped = Enum.map(paginated, fn listing -> Map.delete(listing, "jd_text") end)
+
           Jason.encode!(%{
             "ok" => true,
             "listings" => stripped,
@@ -289,7 +310,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "limit" => limit,
             "returned" => length(stripped)
           })
-        _ -> Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0, "offset" => 0})
+
+        _ ->
+          Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0, "offset" => 0})
       end
 
     if state.conn do
@@ -300,16 +323,23 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.listing.get", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.listing.get", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return full listing details (including jd_text) by ID
     response =
       case Jason.decode(body) do
         {:ok, %{"listing_id" => listing_id}} when is_binary(listing_id) ->
           case listing_store().get(listing_id) do
-            {:ok, listing} -> Jason.encode!(%{"ok" => true, "listing" => listing})
-            {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "listing_not_found"})
+            {:ok, listing} ->
+              Jason.encode!(%{"ok" => true, "listing" => listing})
+
+            {:error, :not_found} ->
+              Jason.encode!(%{"ok" => false, "error" => "listing_not_found"})
           end
+
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "missing_listing_id"})
       end
@@ -322,7 +352,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.listings.recommend", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.listings.recommend", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: recommendations request (tag-scored immediately, LLM enrichment async)
     # TUI sends empty payload, so just call the handler directly
@@ -361,7 +394,11 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "requests.job_applications.snapshot", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg,
+         %{topic: "requests.job_applications.snapshot", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: TUI snapshot format for job-applications-tui
     message = if is_binary(body), do: Jason.decode!(body), else: %{}
@@ -382,6 +419,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_create(payload)
       {:error, _} -> Logger.warning("TUI create: invalid JSON")
     end
+
     {:noreply, state}
   end
 
@@ -391,15 +429,23 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_update(payload)
       {:error, _} -> Logger.warning("TUI update: invalid JSON")
     end
+
     {:noreply, state}
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "commands.job_applications.update_status", body: body} = _msg}, state) do
+  def handle_info(
+        {:msg, %{topic: "commands.job_applications.update_status", body: body} = _msg},
+        state
+      ) do
     case Jason.decode(body) do
-      {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_update_status(payload)
-      {:error, _} -> Logger.warning("TUI update_status: invalid JSON")
+      {:ok, payload} ->
+        BotArmyJobApplications.Handlers.TuiCommandHandler.handle_update_status(payload)
+
+      {:error, _} ->
+        Logger.warning("TUI update_status: invalid JSON")
     end
+
     {:noreply, state}
   end
 
@@ -409,15 +455,20 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_delete(payload)
       {:error, _} -> Logger.warning("TUI delete: invalid JSON")
     end
+
     {:noreply, state}
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "commands.job_applications.add_note", body: body} = _msg}, state) do
+  def handle_info(
+        {:msg, %{topic: "commands.job_applications.add_note", body: body} = _msg},
+        state
+      ) do
     case Jason.decode(body) do
       {:ok, payload} -> BotArmyJobApplications.Handlers.TuiCommandHandler.handle_add_note(payload)
       {:error, _} -> Logger.warning("TUI add_note: invalid JSON")
     end
+
     {:noreply, state}
   end
 
@@ -439,7 +490,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.resume.get", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.resume.get", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return resume by id for surface detail view
     response =
@@ -449,6 +503,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             {:ok, resume} -> Jason.encode!(%{"ok" => true, "resume" => resume})
             {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "not_found"})
           end
+
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "missing resume_id"})
       end
@@ -461,7 +516,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.resume.create", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.resume.create", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: create resume from TUI structured payload
     response =
@@ -469,6 +527,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         {:ok, payload} when is_map(payload) ->
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_create(payload)
           Jason.encode!(result)
+
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
       end
@@ -481,7 +540,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.resume.update", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.resume.update", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: update resume from TUI structured payload
     response =
@@ -495,6 +557,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           end
 
           Jason.encode!(result)
+
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
       end
@@ -507,7 +570,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   @impl true
-  def handle_info({:msg, %{topic: "job.resume.delete", reply_to: reply_to, body: body} = _msg}, state)
+  def handle_info(
+        {:msg, %{topic: "job.resume.delete", reply_to: reply_to, body: body} = _msg},
+        state
+      )
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: delete resume
     response =
@@ -515,6 +581,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         {:ok, payload} when is_map(payload) ->
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_delete(payload)
           Jason.encode!(result)
+
         _ ->
           Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
       end
@@ -528,15 +595,17 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
   @impl true
   def handle_info({:msg, msg}, state) do
-    Logger.debug("Received NATS message on subject: #{msg.topic}")
+    BotArmyRuntime.Tracing.with_consumer_span(msg.topic, msg.headers, fn ->
+      Logger.debug("Received NATS message on subject: #{msg.topic}")
 
-    case BotArmyCore.NATS.Decoder.decode(msg.body) do
-      {:ok, decoded_message} ->
-        route_message(decoded_message)
+      case BotArmyCore.NATS.Decoder.decode(msg.body) do
+        {:ok, decoded_message} ->
+          route_message(decoded_message)
 
-      {:error, reason} ->
-        Logger.warning("Failed to decode message from #{msg.topic}: #{inspect(reason)}")
-    end
+        {:error, reason} ->
+          Logger.warning("Failed to decode message from #{msg.topic}: #{inspect(reason)}")
+      end
+    end)
 
     {:noreply, state}
   end
@@ -545,19 +614,19 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   def handle_info({:nats, :disconnected}, state) do
     Logger.warning("Disconnected from NATS, will attempt to reconnect")
     Process.send_after(self(), :reconnect, @reconnect_delay_ms)
-    {:noreply, state}
+    {:noreply, %{state | subscriptions: [], conn: nil}}
   end
 
   @impl true
   def handle_info({:nats, :connected}, state) do
-    Logger.info("Connected to NATS")
-    {:noreply, state}
+    Logger.info("Connected to NATS, re-subscribing")
+    {:noreply, state, {:continue, :connect}}
   end
 
   @impl true
   def handle_info(:reconnect, state) do
     Logger.info("Attempting to reconnect to NATS")
-    {:noreply, state}
+    {:noreply, state, {:continue, :connect}}
   end
 
   defp get_applications_count do
@@ -570,14 +639,26 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   end
 
   defp application_store do
-    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :application_store,
+      BotArmyJobApplications.ApplicationStore
+    )
   end
 
   defp listing_store do
-    Application.get_env(:bot_army_job_applications, :listing_store, BotArmyJobApplications.ListingStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :listing_store,
+      BotArmyJobApplications.ListingStore
+    )
   end
 
   defp resume_store do
-    Application.get_env(:bot_army_job_applications, :resume_store, BotArmyJobApplications.ResumeStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :resume_store,
+      BotArmyJobApplications.ResumeStore
+    )
   end
 end

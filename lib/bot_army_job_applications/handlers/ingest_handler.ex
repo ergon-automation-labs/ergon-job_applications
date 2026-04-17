@@ -16,12 +16,16 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
   - If new → insert, then publish events.job.listings.new.
   """
   def handle_ingest(message) when is_map(message) do
+    Logger.debug("IngestHandler raw message keys: #{inspect(Map.keys(message))}")
+    Logger.debug("IngestHandler payload: #{inspect(message["payload"], pretty: true, limit: 3)}")
     %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
+    Logger.debug("IngestHandler extracted payload: #{inspect(payload, limit: 5)}")
     store = listing_store()
     company = payload["company"] || payload["company_name"]
     role_title = payload["role_title"] || payload["title"]
     jd_url = payload["jd_url"] || payload["source_url"] || payload["url"]
+    Logger.debug("IngestHandler fields: company=#{inspect(company)}, role_title=#{inspect(role_title)}")
 
     if blank?(company) or blank?(role_title) do
       Logger.warning("Ingest skipped: missing company or role_title")
