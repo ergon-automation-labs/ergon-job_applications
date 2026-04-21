@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.Handlers.IngestHandlerTest do
   use ExUnit.Case, async: false
+  @moduletag :handlers
 
   import Mox
 
@@ -14,6 +15,7 @@ defmodule BotArmyJobApplications.Handlers.IngestHandlerTest do
         "user_id" => nil,
         "payload" => %{"role_title" => "Engineer", "jd_url" => "https://x.com/1"}
       }
+
       assert IngestHandler.handle_ingest(message) == {:error, :missing_required}
     end
 
@@ -23,6 +25,7 @@ defmodule BotArmyJobApplications.Handlers.IngestHandlerTest do
         "user_id" => nil,
         "payload" => %{"company" => "Co", "jd_url" => "https://x.com/1"}
       }
+
       assert IngestHandler.handle_ingest(message) == {:error, :missing_required}
     end
 
@@ -33,11 +36,17 @@ defmodule BotArmyJobApplications.Handlers.IngestHandlerTest do
 
     test "returns :duplicate when listing already exists (same dedup_hash)" do
       tenant_id = "00000000-0000-0000-0000-000000000001"
+
       message = %{
         "tenant_id" => tenant_id,
         "user_id" => nil,
-        "payload" => %{"company" => "Stripe", "role_title" => "Engineer", "jd_url" => "https://boards.greenhouse.io/stripe/jobs/1"}
+        "payload" => %{
+          "company" => "Stripe",
+          "role_title" => "Engineer",
+          "jd_url" => "https://boards.greenhouse.io/stripe/jobs/1"
+        }
       }
+
       BotArmyJobApplications.ListingStoreMock
       |> expect(:get_by_dedup_hash, fn ^tenant_id, _hash ->
         {:ok, %{"id" => "existing-id"}}
@@ -48,7 +57,8 @@ defmodule BotArmyJobApplications.Handlers.IngestHandlerTest do
 
     test "creates listing and returns {:ok, {:created, listing}} when new" do
       tenant_id = "00000000-0000-0000-0000-000000000001"
-      user_id = nil
+      user_id = "00000000-0000-0000-0000-000000000002"
+
       message = %{
         "tenant_id" => tenant_id,
         "user_id" => user_id,
