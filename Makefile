@@ -1,6 +1,6 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 
-.PHONY: setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -81,6 +81,21 @@ deps:
 test:
 	mix test
 
+test-handlers:
+	MIX_ENV=test mix test --only handlers --trace
+
+test-stores:
+	MIX_ENV=test mix test --only stores --trace
+
+test-nats:
+	MIX_ENV=test mix test --only nats --trace
+
+test-integration:
+	mix test --include integration --trace
+
+test-full:
+	mix test --include integration --include nats_live --trace
+
 credo:
 	mix credo
 
@@ -122,6 +137,21 @@ test: test-docker
 test-docker:
 	@echo "Running tests with Docker..."
 	docker compose run --rm job_applications mix test
+
+test-handlers:
+	MIX_ENV=test mix test --only handlers --trace
+
+test-stores:
+	MIX_ENV=test mix test --only stores --trace
+
+test-nats:
+	MIX_ENV=test mix test --only nats --trace
+
+test-integration:
+	mix test --include integration --trace
+
+test-full:
+	mix test --include integration --include nats_live --trace
 
 # Bare-metal tests (requires Elixir, PostgreSQL running locally)
 test-native: setup-db
