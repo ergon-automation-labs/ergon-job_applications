@@ -16,14 +16,16 @@ defmodule BotArmyJobApplications.Application do
 
   @impl true
   def start(_type, _args) do
-    children = []
-    |> maybe_add_repo()
-    |> maybe_add_registry()
-    |> maybe_add_stores()
-    |> maybe_add_supervisor()
-    |> maybe_add_ingestion_worker()
-    |> maybe_add_digest_scheduler()
-    |> maybe_add_consumer()
+    children =
+      []
+      |> maybe_add_repo()
+      |> maybe_add_registry()
+      |> maybe_add_stores()
+      |> maybe_add_supervisor()
+      |> maybe_add_ingestion_worker()
+      |> maybe_add_digest_scheduler()
+      |> maybe_add_consumer()
+      |> maybe_add_health_responder()
 
     opts = [strategy: :one_for_one, name: BotArmyJobApplications.Supervisor]
     Supervisor.start_link(children, opts)
@@ -49,11 +51,12 @@ defmodule BotArmyJobApplications.Application do
     if @env == :test do
       children
     else
-      children ++ [
-        {BotArmyJobApplications.ResumeStore, []},
-        {BotArmyJobApplications.ListingStore, []},
-        {BotArmyJobApplications.ApplicationStore, []}
-      ]
+      children ++
+        [
+          {BotArmyJobApplications.ResumeStore, []},
+          {BotArmyJobApplications.ListingStore, []},
+          {BotArmyJobApplications.ApplicationStore, []}
+        ]
     end
   end
 
@@ -87,5 +90,15 @@ defmodule BotArmyJobApplications.Application do
     else
       [{BotArmyJobApplications.DigestScheduler, []} | children]
     end
+  end
+
+  defp maybe_add_health_responder(children) do
+    if @env == :test,
+      do: children,
+      else: [
+        {BotArmyJobApplications.HealthResponder,
+         [bot_name: :job_applications, repo: BotArmyJobApplications.Repo, version: "0.2.31"]},
+        {BotArmyRuntime.Health.Monitor, []} | children
+      ]
   end
 end

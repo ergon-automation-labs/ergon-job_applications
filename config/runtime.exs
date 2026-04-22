@@ -11,7 +11,7 @@ config :bot_army_job_applications, BotArmyJobApplications.Repo,
   port: String.to_integer(System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_PORT") || System.get_env("DATABASE_PORT") || "30003"),
   username: System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_USER") || System.get_env("DATABASE_USER") || "postgres",
   password: System.get_env("BOT_ARMY_JOB_APPLICATIONS_DB_PASSWORD") || System.get_env("DATABASE_PASSWORD") || "postgres",
-  pool_size: 10,
+  pool_size: 3,
   ssl: false
 
 # Ingestion boards configuration at runtime
