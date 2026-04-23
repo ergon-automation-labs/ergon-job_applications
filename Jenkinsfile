@@ -25,7 +25,10 @@ pipeline {
 
     stage('Checkout') {
       steps {
-        checkout scm
+        sh '''
+          /opt/bot_army/scripts/jenkins_checkout.sh ${GITHUB_REPO} ${WORKSPACE}
+          echo "Current commit: $(git rev-parse HEAD)"
+        '''
       }
     }
 
