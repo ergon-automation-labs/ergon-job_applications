@@ -85,22 +85,25 @@ pipeline {
 
     stage('Sync Job Boards to Salt') {
       steps {
-        sh '''
-          echo "==============================================="
-          echo "Discovering job boards and syncing to Salt pillar"
-          echo "==============================================="
+        timeout(time: 5, unit: 'MINUTES') {
+          sh '''
+            echo "==============================================="
+            echo "Discovering job boards and syncing to Salt pillar"
+            echo "==============================================="
 
-          # Run board discovery from job_applications workspace (has companies.yaml and mix.exs)
-          # The sync_boards_to_salt task clones bot_army_infra to /tmp and pushes directly
-          if [ -f ~/.zshrc ]; then source ~/.zshrc; fi
-          mix job_applications.sync_boards_to_salt || {
-            EXIT_CODE=$?
-            echo "⚠️  Board sync failed (exit code: $EXIT_CODE)"
-            exit 1
-          }
+            # Run board discovery from job_applications workspace (has companies.yaml and mix.exs)
+            # The sync_boards_to_salt task clones bot_army_infra to /tmp and pushes directly
+            # Timeout: 5 minutes max (protects against hanging git operations)
+            if [ -f ~/.zshrc ]; then source ~/.zshrc; fi
+            mix job_applications.sync_boards_to_salt || {
+              EXIT_CODE=$?
+              echo "⚠️  Board sync failed (exit code: $EXIT_CODE)"
+              exit 1
+            }
 
-          echo "✓ Board sync complete"
-        '''
+            echo "✓ Board sync complete"
+          '''
+        }
       }
     }
 
