@@ -31,6 +31,40 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
   @reconnect_delay_ms 5000
 
+  @subjects [
+    %{subject: "job.application.create", type: :subscribe, description: "Create application"},
+    %{
+      subject: "job.application.command.transition",
+      type: :subscribe,
+      description: "Transition application"
+    },
+    %{
+      subject: "job.application.command.rank",
+      type: :subscribe,
+      description: "Rank applications"
+    },
+    %{subject: "job.application.get", type: :request_reply, description: "Get application"},
+    %{subject: "job.application.list", type: :request_reply, description: "List applications"},
+    %{subject: "job.listings.list", type: :request_reply, description: "List listings"},
+    %{subject: "job.listing.get", type: :request_reply, description: "Get listing"},
+    %{
+      subject: "job.listings.recommend",
+      type: :request_reply,
+      description: "Get recommendations"
+    },
+    %{subject: "job.resume.list", type: :request_reply, description: "List resumes"},
+    %{subject: "job.resume.get", type: :request_reply, description: "Get resume"},
+    %{subject: "job.resume.create", type: :request_reply, description: "Create resume"},
+    %{subject: "job.resume.update", type: :request_reply, description: "Update resume"},
+    %{subject: "job.resume.delete", type: :request_reply, description: "Delete resume"},
+    %{subject: "job.pipeline.query", type: :request_reply, description: "Query pipeline"},
+    %{
+      subject: "requests.job_applications.snapshot",
+      type: :request_reply,
+      description: "Get TUI snapshot"
+    }
+  ]
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -186,6 +220,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           end)
           |> Enum.filter(&(not is_nil(&1)))
 
+        BotArmyRuntime.Health.Responder.register_subjects(@subjects)
         {:noreply, %{state | subscriptions: subscriptions, conn: conn}}
 
       {:error, _reason} ->
@@ -205,7 +240,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply pattern for pipeline info
     response =
-      Jason.encode!(%{
+      BotArmyRuntime.NATS.Reply.ok(%{
         status: "ok",
         applications_count: get_applications_count()
       })
@@ -228,12 +263,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, %{"application_id" => app_id}} when is_binary(app_id) ->
           case application_store().get(app_id) do
-            {:ok, app} -> Jason.encode!(%{"ok" => true, "application" => app})
-            {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "not_found"})
+            {:ok, app} -> BotArmyRuntime.NATS.Reply.ok(%{"application" => app})
+            {:error, :not_found} -> BotArmyRuntime.NATS.Reply.error("not_found", :not_found)
           end
 
         _ ->
-          Jason.encode!(%{"ok" => false, "error" => "missing application_id"})
+          BotArmyRuntime.NATS.Reply.error("missing application_id", :missing_application_id)
       end
 
     if state.conn do
@@ -302,8 +337,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           # Remove jd_text from each listing to reduce payload size
           stripped = Enum.map(paginated, fn listing -> Map.delete(listing, "jd_text") end)
 
-          Jason.encode!(%{
-            "ok" => true,
+          BotArmyRuntime.NATS.Reply.ok(%{
             "listings" => stripped,
             "total" => total,
             "offset" => offset,
@@ -312,7 +346,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           })
 
         _ ->
-          Jason.encode!(%{"ok" => false, "listings" => [], "total" => 0, "offset" => 0})
+          BotArmyRuntime.NATS.Reply.error("failed to list listings", :list_failed)
       end
 
     if state.conn do
@@ -334,14 +368,14 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         {:ok, %{"listing_id" => listing_id}} when is_binary(listing_id) ->
           case listing_store().get(listing_id) do
             {:ok, listing} ->
-              Jason.encode!(%{"ok" => true, "listing" => listing})
+              BotArmyRuntime.NATS.Reply.ok(%{"listing" => listing})
 
             {:error, :not_found} ->
-              Jason.encode!(%{"ok" => false, "error" => "listing_not_found"})
+              BotArmyRuntime.NATS.Reply.error("listing_not_found", :not_found)
           end
 
         _ ->
-          Jason.encode!(%{"ok" => false, "error" => "missing_listing_id"})
+          BotArmyRuntime.NATS.Reply.error("missing_listing_id", :missing_listing_id)
       end
 
     if state.conn do
@@ -369,7 +403,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         )
 
       {:error, _} ->
-        response = Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+        response = BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
         if state.conn, do: Gnat.pub(state.conn, reply_to, response)
     end
 
@@ -382,8 +416,8 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     # Request/reply: return list of applications for LiveView
     response =
       case application_store().list() do
-        {:ok, applications} -> Jason.encode!(%{"ok" => true, "applications" => applications})
-        _ -> Jason.encode!(%{"ok" => false, "applications" => []})
+        {:ok, applications} -> BotArmyRuntime.NATS.Reply.ok(%{"applications" => applications})
+        _ -> BotArmyRuntime.NATS.Reply.error("failed to list applications", :list_failed)
       end
 
     if state.conn do
@@ -404,7 +438,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     message = if is_binary(body), do: Jason.decode!(body), else: %{}
     %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
     snapshot = BotArmyJobApplications.Handlers.TuiCommandHandler.get_snapshot(tenant_id)
-    response = Jason.encode!(snapshot)
+    response = BotArmyRuntime.NATS.Reply.ok(snapshot)
 
     if state.conn do
       Gnat.pub(state.conn, reply_to, response)
@@ -478,8 +512,8 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     # Request/reply: return list of resumes for surface
     response =
       case resume_store().list() do
-        {:ok, resumes} -> Jason.encode!(%{"ok" => true, "resumes" => resumes})
-        _ -> Jason.encode!(%{"ok" => false, "resumes" => []})
+        {:ok, resumes} -> BotArmyRuntime.NATS.Reply.ok(%{"resumes" => resumes})
+        _ -> BotArmyRuntime.NATS.Reply.error("failed to list resumes", :list_failed)
       end
 
     if state.conn do
@@ -500,12 +534,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, %{"resume_id" => resume_id}} when is_binary(resume_id) ->
           case resume_store().get(resume_id) do
-            {:ok, resume} -> Jason.encode!(%{"ok" => true, "resume" => resume})
-            {:error, :not_found} -> Jason.encode!(%{"ok" => false, "error" => "not_found"})
+            {:ok, resume} -> BotArmyRuntime.NATS.Reply.ok(%{"resume" => resume})
+            {:error, :not_found} -> BotArmyRuntime.NATS.Reply.error("not_found", :not_found)
           end
 
         _ ->
-          Jason.encode!(%{"ok" => false, "error" => "missing resume_id"})
+          BotArmyRuntime.NATS.Reply.error("missing resume_id", :missing_resume_id)
       end
 
     if state.conn do
@@ -526,10 +560,15 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, payload} when is_map(payload) ->
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_create(payload)
-          Jason.encode!(result)
+
+          if result["ok"] == true do
+            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+          else
+            BotArmyRuntime.NATS.Reply.error(result["error"] || "create failed", :create_failed)
+          end
 
         _ ->
-          Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
@@ -554,12 +593,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           # If update succeeded, re-score all listings with new preferences
           if result["ok"] == true do
             BotArmyJobApplications.Handlers.RecommendationHandler.rescore_all()
+            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+          else
+            BotArmyRuntime.NATS.Reply.error(result["error"] || "update failed", :update_failed)
           end
 
-          Jason.encode!(result)
-
         _ ->
-          Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
@@ -580,10 +620,15 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, payload} when is_map(payload) ->
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_delete(payload)
-          Jason.encode!(result)
+
+          if result["ok"] == true do
+            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+          else
+            BotArmyRuntime.NATS.Reply.error(result["error"] || "delete failed", :delete_failed)
+          end
 
         _ ->
-          Jason.encode!(%{"ok" => false, "error" => "invalid_json"})
+          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
