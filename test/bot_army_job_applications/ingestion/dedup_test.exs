@@ -1,12 +1,25 @@
 defmodule BotArmyJobApplications.Ingestion.DedupTest do
   use ExUnit.Case, async: true
+  @moduletag :ingestion
 
   alias BotArmyJobApplications.Ingestion.Dedup
 
   describe "dedup_hash/3" do
     test "same inputs produce same hash" do
-      h1 = Dedup.dedup_hash("Stripe", "Senior Engineer", "https://boards.greenhouse.io/stripe/jobs/123")
-      h2 = Dedup.dedup_hash("Stripe", "Senior Engineer", "https://boards.greenhouse.io/stripe/jobs/123")
+      h1 =
+        Dedup.dedup_hash(
+          "Stripe",
+          "Senior Engineer",
+          "https://boards.greenhouse.io/stripe/jobs/123"
+        )
+
+      h2 =
+        Dedup.dedup_hash(
+          "Stripe",
+          "Senior Engineer",
+          "https://boards.greenhouse.io/stripe/jobs/123"
+        )
+
       assert h1 == h2
       assert is_binary(h1)
       assert String.length(h1) == 64

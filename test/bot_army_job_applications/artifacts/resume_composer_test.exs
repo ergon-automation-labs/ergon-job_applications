@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.ResumeComposerTest do
   use ExUnit.Case
+  @moduletag :core
   doctest BotArmyJobApplications.ResumeComposer
 
   describe "compose/2" do

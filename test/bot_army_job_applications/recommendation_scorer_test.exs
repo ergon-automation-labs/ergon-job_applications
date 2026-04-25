@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.RecommendationScorerTest do
   use ExUnit.Case
+  @moduletag :core
 
   alias BotArmyJobApplications.RecommendationScorer
 
@@ -8,7 +9,8 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       listing = %{
         "company" => "Acme Corp",
         "role_title" => "Senior Elixir Engineer",
-        "jd_text" => "We are looking for a backend engineer with 5+ years of experience in building distributed systems...",
+        "jd_text" =>
+          "We are looking for a backend engineer with 5+ years of experience in building distributed systems...",
         "jd_tags" => %{
           "technologies" => ["Elixir", "PostgreSQL"],
           "frameworks" => ["Phoenix"]
@@ -18,7 +20,10 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
 
       resume = %{
         "id" => "resume-1",
-        "identity" => %{"name" => "Alice", "summary" => "Experienced distributed systems engineer"},
+        "identity" => %{
+          "name" => "Alice",
+          "summary" => "Experienced distributed systems engineer"
+        },
         "skills" => [
           %{"name" => "Elixir", "proficiency" => "expert", "years" => 5},
           %{"name" => "PostgreSQL", "proficiency" => "advanced", "years" => 6}
@@ -166,6 +171,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       resume = %{"skills" => [%{"name" => "Elixir"}], "roles" => []}
 
       score = RecommendationScorer.tag_overlap_score(listing, resume)
+
       # Score is 0.0*0.50 (jaccard) + 0.5*0.15 (seniority) + 0.5*0.15 (role) + 0.5*0.10 (salary) + 0.5*0.10 (location) = 0.25
       assert score == 0.25
     end
@@ -187,6 +193,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -198,12 +205,14 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
       # 0.0*0.50 + 0.5*0.15 + 0.5*0.15 + 0.5*0.10 + 1.0*0.10 = 0.30
       assert_in_delta score, 0.30, 0.001
     end
+
     test "hybrid jobs score 1.0 location bonus" do
       resume = %{
         "identity" => %{"name" => "Candidate"},
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -221,6 +230,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -239,6 +249,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -257,6 +268,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -275,6 +287,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -293,6 +306,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",
@@ -311,6 +325,7 @@ defmodule BotArmyJobApplications.RecommendationScorerTest do
         "skills" => [],
         "roles" => []
       }
+
       listing = %{
         "jd_tags" => %{},
         "jd_text" => "",

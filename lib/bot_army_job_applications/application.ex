@@ -24,6 +24,7 @@ defmodule BotArmyJobApplications.Application do
       |> maybe_add_supervisor()
       |> maybe_add_ingestion_worker()
       |> maybe_add_digest_scheduler()
+      |> maybe_add_pulse_publisher()
       |> maybe_add_consumer()
       |> maybe_add_health_responder()
 
@@ -89,6 +90,14 @@ defmodule BotArmyJobApplications.Application do
       children
     else
       [{BotArmyJobApplications.DigestScheduler, []} | children]
+    end
+  end
+
+  defp maybe_add_pulse_publisher(children) do
+    if @env == :test do
+      children
+    else
+      [{BotArmyJobApplications.PulsePublisher, []} | children]
     end
   end
 

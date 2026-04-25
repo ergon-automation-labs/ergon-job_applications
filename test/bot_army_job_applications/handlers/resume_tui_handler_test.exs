@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
   use ExUnit.Case, async: false
+  @moduletag :handlers
   import Mox
 
   setup :verify_on_exit!
@@ -10,7 +11,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns ok with resume_id on success" do
       resume_id = "test-resume-id-123"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn payload, file_metadata ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn payload,
+                                                                             file_metadata ->
         assert payload["identity"]["name"] == "Jane Doe"
         assert payload["roles"] == []
         assert payload["skills"] == []
@@ -32,7 +34,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     end
 
     test "returns error map when store returns error" do
-      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn _payload, _file_metadata ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :create_from_parsed, fn _payload,
+                                                                             _file_metadata ->
         {:error, :invalid_data}
       end)
 
@@ -70,7 +73,9 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
       resume_id = "existing-resume-id"
       tenant_id = "00000000-0000-0000-0000-000000000001"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn ^tenant_id, ^resume_id, payload ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn ^tenant_id,
+                                                                       ^resume_id,
+                                                                       payload ->
         assert payload["identity"]["name"] == "Jane Smith"
         {:ok, %{"id" => resume_id, "identity" => %{"name" => "Jane Smith"}}}
       end)
@@ -119,7 +124,9 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns error map when store returns error" do
       resume_id = "nonexistent-id"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn _tenant_id, ^resume_id, _payload ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn _tenant_id,
+                                                                       ^resume_id,
+                                                                       _payload ->
         {:error, :not_found}
       end)
 
@@ -139,7 +146,9 @@ defmodule BotArmyJobApplications.Handlers.ResumeTuiHandlerTest do
     test "returns error with string reason from store" do
       resume_id = "some-id"
 
-      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn _tenant_id, ^resume_id, _payload ->
+      expect(BotArmyJobApplications.ResumeStoreMock, :replace_full, fn _tenant_id,
+                                                                       ^resume_id,
+                                                                       _payload ->
         {:error, "database connection failed"}
       end)
 

@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
   use ExUnit.Case, async: true
+  @moduletag :handlers
 
   describe "handle_create/1" do
     test "validates required fields: company" do

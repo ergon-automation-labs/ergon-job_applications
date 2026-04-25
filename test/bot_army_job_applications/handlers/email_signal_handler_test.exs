@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
   use ExUnit.Case, async: false
+  @moduletag :handlers
   import Mox
 
   setup :verify_on_exit!
@@ -23,7 +24,9 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         {:ok, [app]}
       end)
 
-      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id, app_id, payload ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id,
+                                                                      app_id,
+                                                                      payload ->
         assert app_id == "app-123"
         assert is_map(payload["pending_signal"])
 
@@ -64,7 +67,9 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         {:ok, [app]}
       end)
 
-      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id, _app_id, payload ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id,
+                                                                      _app_id,
+                                                                      payload ->
         signal = payload["pending_signal"]
         assert signal["type"] == "interview_invite"
         assert signal["proposed_transition"] == "phone_screen"
@@ -95,7 +100,9 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         {:ok, [app]}
       end)
 
-      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id, _app_id, payload ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id,
+                                                                      _app_id,
+                                                                      payload ->
         signal = payload["pending_signal"]
         assert signal["type"] == "offer"
         assert signal["proposed_transition"] == "offer"
@@ -126,7 +133,9 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         {:ok, [app]}
       end)
 
-      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id, _app_id, payload ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id,
+                                                                      _app_id,
+                                                                      payload ->
         signal = payload["pending_signal"]
         assert signal["type"] == "rejection"
         assert signal["proposed_transition"] == "rejected"
@@ -220,7 +229,9 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         {:ok, [app]}
       end)
 
-      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id, _app_id, payload ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id,
+                                                                      _app_id,
+                                                                      payload ->
         signal = payload["pending_signal"]
         assert signal["confidence"] == 0.87
         {:ok, Map.put(app, "pending_signal", signal)}
@@ -249,7 +260,9 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         {:ok, [app]}
       end)
 
-      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id, _app_id, payload ->
+      expect(BotArmyJobApplications.ApplicationStoreMock, :update, fn _tenant_id,
+                                                                      _app_id,
+                                                                      payload ->
         assert is_map(payload["pending_signal"])
         {:ok, Map.put(app, "pending_signal", payload["pending_signal"])}
       end)

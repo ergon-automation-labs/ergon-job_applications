@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.Handlers.ArtifactHandlerTest do
   use ExUnit.Case, async: true
+  @moduletag :handlers
 
   describe "handle_request/1" do
     test "validates required fields: application_id" do

@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
   use ExUnit.Case, async: false
+  @moduletag :handlers
 
   import Mox
 
@@ -26,11 +27,36 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
 
     test "counts active vs terminal states correctly" do
       now = DateTime.utc_now()
+
       apps = [
-        %{"id" => "1", "state" => "identified", "company" => "Acme", "role_title" => "Engineer", "updated_at" => DateTime.to_iso8601(now)},
-        %{"id" => "2", "state" => "submitted", "company" => "Anvil", "role_title" => "Manager", "updated_at" => DateTime.to_iso8601(now)},
-        %{"id" => "3", "state" => "accepted", "company" => "BigCorp", "role_title" => "Lead", "updated_at" => DateTime.to_iso8601(now)},
-        %{"id" => "4", "state" => "rejected", "company" => "LittleCorp", "role_title" => "Dev", "updated_at" => DateTime.to_iso8601(now)}
+        %{
+          "id" => "1",
+          "state" => "identified",
+          "company" => "Acme",
+          "role_title" => "Engineer",
+          "updated_at" => DateTime.to_iso8601(now)
+        },
+        %{
+          "id" => "2",
+          "state" => "submitted",
+          "company" => "Anvil",
+          "role_title" => "Manager",
+          "updated_at" => DateTime.to_iso8601(now)
+        },
+        %{
+          "id" => "3",
+          "state" => "accepted",
+          "company" => "BigCorp",
+          "role_title" => "Lead",
+          "updated_at" => DateTime.to_iso8601(now)
+        },
+        %{
+          "id" => "4",
+          "state" => "rejected",
+          "company" => "LittleCorp",
+          "role_title" => "Dev",
+          "updated_at" => DateTime.to_iso8601(now)
+        }
       ]
 
       digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)
@@ -53,6 +79,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
       }
 
       now = DateTime.utc_now()
+
       apps = [
         %{
           "id" => "1",
@@ -81,7 +108,8 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
 
     test "identifies stalled applications (7+ days old)" do
       now = DateTime.utc_now()
-      stale_time = DateTime.add(now, -(10 * 86400), :second)  # 10 days ago
+      # 10 days ago
+      stale_time = DateTime.add(now, -(10 * 86400), :second)
 
       apps = [
         %{
@@ -154,15 +182,16 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
 
     test "handle_request calls store and publishes digest" do
       expect(BotArmyJobApplications.ApplicationStoreMock, :list, fn _tenant_id ->
-        {:ok, [
-          %{
-            "id" => "1",
-            "state" => "identified",
-            "company" => "Test Corp",
-            "role_title" => "Engineer",
-            "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-          }
-        ]}
+        {:ok,
+         [
+           %{
+             "id" => "1",
+             "state" => "identified",
+             "company" => "Test Corp",
+             "role_title" => "Engineer",
+             "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+           }
+         ]}
       end)
 
       message = %{
@@ -173,7 +202,11 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
         "payload" => %{}
       }
 
-      Application.put_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStoreMock)
+      Application.put_env(
+        :bot_army_job_applications,
+        :application_store,
+        BotArmyJobApplications.ApplicationStoreMock
+      )
 
       # Call handle_request
       result = BotArmyJobApplications.Handlers.DigestHandler.handle_request(message)

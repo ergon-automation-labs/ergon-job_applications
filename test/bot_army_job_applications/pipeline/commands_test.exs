@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.CommandsTest do
   use ExUnit.Case
+  @moduletag :pipeline
   doctest BotArmyJobApplications.Commands
 
   describe "valid_transition?/2" do
@@ -96,7 +97,8 @@ defmodule BotArmyJobApplications.CommandsTest do
 
   describe "create_state_event/3" do
     test "creates valid state event" do
-      {:ok, event} = BotArmyJobApplications.Commands.create_state_event("identified", "drafting", %{})
+      {:ok, event} =
+        BotArmyJobApplications.Commands.create_state_event("identified", "drafting", %{})
 
       assert event["from_state"] == "identified"
       assert event["to_state"] == "drafting"
@@ -106,17 +108,25 @@ defmodule BotArmyJobApplications.CommandsTest do
 
     test "creates state event with metadata" do
       metadata = %{"reason" => "user_input", "triggered_by" => "web"}
-      {:ok, event} = BotArmyJobApplications.Commands.create_state_event("drafting", "ready_to_submit", metadata)
+
+      {:ok, event} =
+        BotArmyJobApplications.Commands.create_state_event(
+          "drafting",
+          "ready_to_submit",
+          metadata
+        )
 
       assert event["metadata"] == metadata
     end
 
     test "rejects invalid transition" do
-      {:error, :invalid_transition} = BotArmyJobApplications.Commands.create_state_event("identified", "submitted", %{})
+      {:error, :invalid_transition} =
+        BotArmyJobApplications.Commands.create_state_event("identified", "submitted", %{})
     end
 
     test "timestamp is ISO8601 formatted" do
-      {:ok, event} = BotArmyJobApplications.Commands.create_state_event("identified", "drafting", %{})
+      {:ok, event} =
+        BotArmyJobApplications.Commands.create_state_event("identified", "drafting", %{})
 
       assert String.match?(event["transitioned_at"], ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
     end

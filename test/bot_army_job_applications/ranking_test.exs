@@ -1,5 +1,6 @@
 defmodule BotArmyJobApplications.RankingTest do
   use ExUnit.Case
+  @moduletag :core
 
   alias BotArmyJobApplications.Ranking
 
@@ -71,7 +72,8 @@ defmodule BotArmyJobApplications.RankingTest do
       score_low = Ranking.score(app_low)
 
       # Both should have coverage clamped
-      assert score_high > 0.5  # Should treat as 1.0 coverage
+      # Should treat as 1.0 coverage
+      assert score_high > 0.5
       # With coverage clamped to 0: 0.0*0.4 + 0.9*0.3 + 0.5*0.2 + 0.5*0.1 = 0.42
       assert score_low > 0.4 and score_low < 0.5
     end
@@ -160,22 +162,24 @@ defmodule BotArmyJobApplications.RankingTest do
 
   describe "top_n/2" do
     test "returns top N applications" do
-      apps = Enum.map(1..10, fn i ->
-        %{
-          "id" => to_string(i),
-          "coverage_score" => i / 10,
-          "state" => "identified",
-          "salary_range" => nil,
-          "jd_tags" => nil
-        }
-      end)
+      apps =
+        Enum.map(1..10, fn i ->
+          %{
+            "id" => to_string(i),
+            "coverage_score" => i / 10,
+            "state" => "identified",
+            "salary_range" => nil,
+            "jd_tags" => nil
+          }
+        end)
 
       top_3 = Ranking.top_n(apps, 3)
 
       assert length(top_3) == 3
       # Top 3 should be highest scores
       {app1, _} = hd(top_3)
-      assert app1["id"] == "10"  # Highest coverage_score (1.0)
+      # Highest coverage_score (1.0)
+      assert app1["id"] == "10"
     end
 
     test "handles N larger than list size" do
@@ -240,12 +244,15 @@ defmodule BotArmyJobApplications.RankingTest do
 
       {high, _medium, low} = Ranking.by_tier(apps)
 
-      assert length(high) > 0  # At least one in high tier
-      assert length(low) > 0   # At least one in low tier
+      # At least one in high tier
+      assert length(high) > 0
+      # At least one in low tier
+      assert length(low) > 0
       # All high tier scores >= 0.75
       Enum.each(high, fn {_, score} ->
         assert score >= 0.75
       end)
+
       # All low tier scores < 0.50
       Enum.each(low, fn {_, score} ->
         assert score < 0.50
@@ -253,7 +260,14 @@ defmodule BotArmyJobApplications.RankingTest do
     end
 
     test "returns three-tuple regardless of tier population" do
-      apps = [%{"coverage_score" => 0.5, "state" => "identified", "salary_range" => nil, "jd_tags" => nil}]
+      apps = [
+        %{
+          "coverage_score" => 0.5,
+          "state" => "identified",
+          "salary_range" => nil,
+          "jd_tags" => nil
+        }
+      ]
 
       {high, medium, low} = Ranking.by_tier(apps)
 
@@ -274,12 +288,14 @@ defmodule BotArmyJobApplications.RankingTest do
 
       score = Ranking.score(app)
       # Coverage score is 40% of total weight with 0.75 value
-      assert score >= 0.3  # 0.75 * 0.40 = 0.30
+      # 0.75 * 0.40 = 0.30
+      assert score >= 0.3
     end
 
     test "accepts integer coverage scores (0-100)" do
       app = %{
-        "coverage_score" => 80,  # 80%
+        # 80%
+        "coverage_score" => 80,
         "state" => "identified",
         "salary_range" => nil,
         "jd_tags" => nil
@@ -302,7 +318,8 @@ defmodule BotArmyJobApplications.RankingTest do
 
       score = Ranking.score(app)
       # Salary is 20% weight at 1.0
-      assert score >= 0.27  # 0.5*0.40 + 1.0*0.20 + 0.5*0.30 + 0.5*0.10
+      # 0.5*0.40 + 1.0*0.20 + 0.5*0.30 + 0.5*0.10
+      assert score >= 0.27
     end
 
     test "low salary range (50k, 60k) scores lower than high salary" do
@@ -446,10 +463,11 @@ defmodule BotArmyJobApplications.RankingTest do
         "rejected"
       ]
 
-      scores = Enum.map(states, fn state ->
-        app = Map.put(base, "state", state)
-        {state, Ranking.score(app)}
-      end)
+      scores =
+        Enum.map(states, fn state ->
+          app = Map.put(base, "state", state)
+          {state, Ranking.score(app)}
+        end)
 
       # ready_to_submit should be highest
       {best_state, best_score} = Enum.max_by(scores, &elem(&1, 1))
