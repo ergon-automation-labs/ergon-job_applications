@@ -30,6 +30,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   require Logger
 
   @reconnect_delay_ms 5000
+  @version Mix.Project.config()[:version]
 
   @subjects [
     %{subject: "job.application.create", type: :subscribe, description: "Create application"},
@@ -220,7 +221,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           end)
           |> Enum.filter(&(not is_nil(&1)))
 
-        BotArmyRuntime.Health.Responder.register_subjects(@subjects)
+        BotArmyRuntime.Registry.register("job_applications", @subjects, @version)
         {:noreply, %{state | subscriptions: subscriptions, conn: conn}}
 
       {:error, _reason} ->
@@ -262,7 +263,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     response =
       case Jason.decode(body) do
         {:ok, %{"application_id" => app_id}} when is_binary(app_id) ->
-          case application_store().get(app_id) do
+          case application_store().get(tenant_id(), app_id) do
             {:ok, app} -> BotArmyRuntime.NATS.Reply.ok(%{"application" => app})
             {:error, :not_found} -> BotArmyRuntime.NATS.Reply.error("not_found", :not_found)
           end
@@ -308,7 +309,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       end
 
     response =
-      case listing_store().list([]) do
+      case listing_store().list(tenant_id()) do
         {:ok, listings} ->
           # Sort listings based on requested sort_by parameter
           sorted =
@@ -366,7 +367,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     response =
       case Jason.decode(body) do
         {:ok, %{"listing_id" => listing_id}} when is_binary(listing_id) ->
-          case listing_store().get(listing_id) do
+          case listing_store().get(tenant_id(), listing_id) do
             {:ok, listing} ->
               BotArmyRuntime.NATS.Reply.ok(%{"listing" => listing})
 
@@ -415,7 +416,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return list of applications for LiveView
     response =
-      case application_store().list() do
+      case application_store().list(tenant_id()) do
         {:ok, applications} -> BotArmyRuntime.NATS.Reply.ok(%{"applications" => applications})
         _ -> BotArmyRuntime.NATS.Reply.error("failed to list applications", :list_failed)
       end
@@ -511,7 +512,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: return list of resumes for surface
     response =
-      case resume_store().list() do
+      case resume_store().list(tenant_id()) do
         {:ok, resumes} -> BotArmyRuntime.NATS.Reply.ok(%{"resumes" => resumes})
         _ -> BotArmyRuntime.NATS.Reply.error("failed to list resumes", :list_failed)
       end
@@ -533,7 +534,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     response =
       case Jason.decode(body) do
         {:ok, %{"resume_id" => resume_id}} when is_binary(resume_id) ->
-          case resume_store().get(resume_id) do
+          case resume_store().get(tenant_id(), resume_id) do
             {:ok, resume} -> BotArmyRuntime.NATS.Reply.ok(%{"resume" => resume})
             {:error, :not_found} -> BotArmyRuntime.NATS.Reply.error("not_found", :not_found)
           end
@@ -706,4 +707,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       BotArmyJobApplications.ResumeStore
     )
   end
+
+  defp tenant_id,
+    do: System.get_env("BOT_ARMY_TENANT_ID", "00000000-0000-0000-0000-000000000001")
 end

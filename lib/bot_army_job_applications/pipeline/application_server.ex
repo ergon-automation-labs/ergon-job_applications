@@ -17,7 +17,11 @@ defmodule BotArmyJobApplications.ApplicationServer do
   require Logger
 
   defp application_store do
-    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :application_store,
+      BotArmyJobApplications.ApplicationStore
+    )
   end
 
   def start_link(application_id) do
@@ -90,7 +94,10 @@ defmodule BotArmyJobApplications.ApplicationServer do
     Logger.info("ApplicationServer starting for application: #{application_id}")
 
     # Load application from database
-    case BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_id) do
+    case BotArmyJobApplications.Repo.get(
+           BotArmyJobApplications.Schemas.Application,
+           application_id
+         ) do
       nil ->
         Logger.error("Application not found: #{application_id}")
         {:stop, :not_found}
@@ -112,30 +119,37 @@ defmodule BotArmyJobApplications.ApplicationServer do
 
       true ->
         # Create state event
-        {:ok, event} = BotArmyJobApplications.Commands.create_state_event(from_state, to_state, metadata)
+        {:ok, event} =
+          BotArmyJobApplications.Commands.create_state_event(from_state, to_state, metadata)
 
         # Update history
         new_history = (state["history"] || []) ++ [event]
 
         # Update database
         app_uuid = Ecto.UUID.cast!(state["id"])
-        db_app = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, app_uuid)
 
-        changeset = BotArmyJobApplications.Schemas.Application.changeset(
-          db_app,
-          %{
-            "state" => to_state,
-            "history" => new_history
-          }
-        )
+        db_app =
+          BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, app_uuid)
+
+        changeset =
+          BotArmyJobApplications.Schemas.Application.changeset(
+            db_app,
+            %{
+              "state" => to_state,
+              "history" => new_history
+            }
+          )
 
         case BotArmyJobApplications.Repo.update(changeset) do
           {:ok, updated_db_app} ->
             updated_app = schema_to_map(updated_db_app)
-            Logger.info("Transitioned application #{state["id"]} from #{from_state} to #{to_state}")
+
+            Logger.info(
+              "Transitioned application #{state["id"]} from #{from_state} to #{to_state}"
+            )
 
             # Sync to store
-            application_store().update(state["id"], updated_app)
+            application_store().update(state["tenant_id"], state["id"], updated_app)
 
             # If terminal state, stop self
             if BotArmyJobApplications.Commands.terminal?(to_state) do
@@ -162,17 +176,18 @@ defmodule BotArmyJobApplications.ApplicationServer do
     app_uuid = Ecto.UUID.cast!(state["id"])
     db_app = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, app_uuid)
 
-    changeset = BotArmyJobApplications.Schemas.Application.changeset(
-      db_app,
-      %{"pending_signal" => signal}
-    )
+    changeset =
+      BotArmyJobApplications.Schemas.Application.changeset(
+        db_app,
+        %{"pending_signal" => signal}
+      )
 
     case BotArmyJobApplications.Repo.update(changeset) do
       {:ok, updated_db_app} ->
         updated_app = schema_to_map(updated_db_app)
         Logger.debug("Set pending signal for application #{state["id"]}")
         # Sync to store
-        application_store().update(state["id"], updated_app)
+        application_store().update(state["tenant_id"], state["id"], updated_app)
         {:reply, {:ok, updated_app}, updated_app}
 
       {:error, changeset} ->
@@ -186,17 +201,18 @@ defmodule BotArmyJobApplications.ApplicationServer do
     app_uuid = Ecto.UUID.cast!(state["id"])
     db_app = BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, app_uuid)
 
-    changeset = BotArmyJobApplications.Schemas.Application.changeset(
-      db_app,
-      %{"pending_signal" => nil}
-    )
+    changeset =
+      BotArmyJobApplications.Schemas.Application.changeset(
+        db_app,
+        %{"pending_signal" => nil}
+      )
 
     case BotArmyJobApplications.Repo.update(changeset) do
       {:ok, updated_db_app} ->
         updated_app = schema_to_map(updated_db_app)
         Logger.debug("Cleared pending signal for application #{state["id"]}")
         # Sync to store
-        application_store().update(state["id"], updated_app)
+        application_store().update(state["tenant_id"], state["id"], updated_app)
         {:reply, {:ok, updated_app}, updated_app}
 
       {:error, changeset} ->
@@ -213,19 +229,24 @@ defmodule BotArmyJobApplications.ApplicationServer do
     # Merge into existing artifacts; persist coverage_score at application level when present
     new_artifacts = Map.merge(state["artifacts"] || %{}, artifacts)
     attrs = %{"artifacts" => new_artifacts}
-    attrs = if Map.has_key?(artifacts, "coverage_score"), do: Map.put(attrs, "coverage_score", artifacts["coverage_score"]), else: attrs
 
-    changeset = BotArmyJobApplications.Schemas.Application.changeset(
-      db_app,
-      attrs
-    )
+    attrs =
+      if Map.has_key?(artifacts, "coverage_score"),
+        do: Map.put(attrs, "coverage_score", artifacts["coverage_score"]),
+        else: attrs
+
+    changeset =
+      BotArmyJobApplications.Schemas.Application.changeset(
+        db_app,
+        attrs
+      )
 
     case BotArmyJobApplications.Repo.update(changeset) do
       {:ok, updated_db_app} ->
         updated_app = schema_to_map(updated_db_app)
         Logger.info("Set artifacts for application #{state["id"]}")
         # Sync to store
-        application_store().update(state["id"], updated_app)
+        application_store().update(state["tenant_id"], state["id"], updated_app)
         {:reply, {:ok, updated_app}, updated_app}
 
       {:error, changeset} ->

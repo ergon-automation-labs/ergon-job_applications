@@ -10,7 +10,11 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   require Logger
 
   defp resume_store do
-    Application.get_env(:bot_army_job_applications, :resume_store, BotArmyJobApplications.ResumeStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :resume_store,
+      BotArmyJobApplications.ResumeStore
+    )
   end
 
   @doc """
@@ -37,17 +41,32 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
               {:error, :not_found} ->
                 Logger.error("Resume not found: #{resume_id}")
-                BotArmyJobApplications.NATS.Publisher.publish_error(event_id, :not_found, "Resume not found")
+
+                BotArmyJobApplications.NATS.Publisher.publish_error(
+                  event_id,
+                  :not_found,
+                  "Resume not found"
+                )
             end
 
           {:error, :not_found} ->
             Logger.error("Application not found: #{application_id}")
-            BotArmyJobApplications.NATS.Publisher.publish_error(event_id, :not_found, "Application not found")
+
+            BotArmyJobApplications.NATS.Publisher.publish_error(
+              event_id,
+              :not_found,
+              "Application not found"
+            )
         end
 
       {:error, reason} ->
         Logger.warning("Invalid artifact request: #{inspect(reason)}")
-        BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Invalid artifact request")
+
+        BotArmyJobApplications.NATS.Publisher.publish_error(
+          event_id,
+          reason,
+          "Invalid artifact request"
+        )
     end
   end
 
@@ -68,16 +87,22 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       {:ok, jd_tags} ->
         if resume_id do
           # Try ApplicationServer first (fast, in-memory), fall back to database
-          application = case BotArmyJobApplications.ApplicationServer.get(application_id) do
-            {:ok, app} -> {:ok, app}
-            {:error, :not_found} ->
-              # Application process not in registry (e.g., after restart)
-              # Try loading from database directly
-              case BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Application, application_id) do
-                nil -> {:error, :not_found}
-                db_app -> {:ok, schema_to_map(db_app)}
-              end
-          end
+          application =
+            case BotArmyJobApplications.ApplicationServer.get(application_id) do
+              {:ok, app} ->
+                {:ok, app}
+
+              {:error, :not_found} ->
+                # Application process not in registry (e.g., after restart)
+                # Try loading from database directly
+                case BotArmyJobApplications.Repo.get(
+                       BotArmyJobApplications.Schemas.Application,
+                       application_id
+                     ) do
+                  nil -> {:error, :not_found}
+                  db_app -> {:ok, schema_to_map(db_app)}
+                end
+            end
 
           case application do
             {:ok, application_data} ->
@@ -96,7 +121,13 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
                   )
 
                   # Initiate cover letter generation
-                  initiate_cover_letter_generation(application_data, composed, jd_tags, application_id, resume_id)
+                  initiate_cover_letter_generation(
+                    application_data,
+                    composed,
+                    jd_tags,
+                    application_id,
+                    resume_id
+                  )
 
                 {:error, :not_found} ->
                   Logger.error("Resume not found during JD analysis")
@@ -120,6 +151,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   Receives LLM-generated cover letter text and completes artifact generation.
   """
   def handle_cover_letter_response(message) do
+    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     resume_id = source_metadata["resume_id"]
@@ -136,9 +168,10 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
         # Post-process cover letter to fill in contact info from resume
         processed_cover_letter =
           if resume_id do
-            case resume_store().get(resume_id) do
+            case resume_store().get(tenant_id, resume_id) do
               {:ok, resume} ->
                 fill_contact_placeholders(cover_letter_md, resume)
+
               {:error, _} ->
                 cover_letter_md
             end
@@ -147,12 +180,19 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
           end
 
         # Update artifacts with cover letter
-        final_artifacts = Map.merge(artifacts, %{
-          "cover_letter_md" => processed_cover_letter,
-          "composed_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601()
-        })
+        final_artifacts =
+          Map.merge(artifacts, %{
+            "cover_letter_md" => processed_cover_letter,
+            "composed_at" =>
+              NaiveDateTime.utc_now()
+              |> NaiveDateTime.truncate(:second)
+              |> NaiveDateTime.to_iso8601()
+          })
 
-        case BotArmyJobApplications.ApplicationServer.set_artifacts(application_id, final_artifacts) do
+        case BotArmyJobApplications.ApplicationServer.set_artifacts(
+               application_id,
+               final_artifacts
+             ) do
           {:ok, updated_app} ->
             Logger.info("Artifacts complete for application: #{application_id}")
 
@@ -201,7 +241,14 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
           end
 
         # Add update timestamp
-        artifacts = Map.put(artifacts, "updated_at", NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601())
+        artifacts =
+          Map.put(
+            artifacts,
+            "updated_at",
+            NaiveDateTime.utc_now()
+            |> NaiveDateTime.truncate(:second)
+            |> NaiveDateTime.to_iso8601()
+          )
 
         case BotArmyJobApplications.ApplicationServer.set_artifacts(application_id, artifacts) do
           {:ok, _updated_app} ->
@@ -258,11 +305,11 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     }
 
     case BotArmyJobApplications.NATS.Publisher.publish_llm_request_with_metadata(
-      llm_payload,
-      "jd_analysis",
-      application["id"],
-      %{"resume_id" => resume_id}
-    ) do
+           llm_payload,
+           "jd_analysis",
+           application["id"],
+           %{"resume_id" => resume_id}
+         ) do
       :ok ->
         Logger.info("Initiated JD analysis for application: #{application["id"]}")
         # Update application with pending signal
@@ -273,22 +320,29 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
       {:error, reason} ->
         Logger.error("Failed to publish JD analysis request: #{inspect(reason)}")
-        BotArmyJobApplications.NATS.Publisher.publish_error(event_id, reason, "Failed to initiate JD analysis")
+
+        BotArmyJobApplications.NATS.Publisher.publish_error(
+          event_id,
+          reason,
+          "Failed to initiate JD analysis"
+        )
     end
   end
 
   defp initiate_cover_letter_generation(application, composed, jd_tags, application_id, resume_id) do
     # Prepare context for cover letter generation
-    selected_bullets = composed["roles"]
-    |> Enum.flat_map(fn role -> role["bullets"] end)
-    |> Enum.sort_by(fn bullet -> bullet["tag_score"] end, :desc)
-    |> Enum.take(10)
+    selected_bullets =
+      composed["roles"]
+      |> Enum.flat_map(fn role -> role["bullets"] end)
+      |> Enum.sort_by(fn bullet -> bullet["tag_score"] end, :desc)
+      |> Enum.take(10)
 
     selected_skills = composed["skills"] |> Enum.take(5)
 
-    bullets_text = selected_bullets
-    |> Enum.map(fn b -> "- #{b["selected_text"]}" end)
-    |> Enum.join("\n")
+    bullets_text =
+      selected_bullets
+      |> Enum.map(fn b -> "- #{b["selected_text"]}" end)
+      |> Enum.join("\n")
 
     skills_text = selected_skills |> Enum.join(", ")
 
@@ -327,15 +381,16 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     }
 
     case BotArmyJobApplications.NATS.Publisher.publish_llm_request_with_metadata(
-      llm_payload,
-      "cover_letter",
-      application_id,
-      %{"resume_id" => resume_id}
-    ) do
+           llm_payload,
+           "cover_letter",
+           application_id,
+           %{"resume_id" => resume_id}
+         ) do
       :ok ->
         Logger.info("Initiated cover letter generation for application: #{application_id}")
         # Store the composed resume for later use
         resume_md = format_resume_bullets(composed["roles"], composed["summary"])
+
         BotArmyJobApplications.ApplicationServer.set_artifacts(
           application_id,
           %{
@@ -361,18 +416,20 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
     """
 
-    roles_md = roles
-    |> Enum.map(fn role ->
-      bullets = role["bullets"]
-      |> Enum.map(fn bullet -> "- #{bullet["selected_text"]}" end)
-      |> Enum.join("\n")
+    roles_md =
+      roles
+      |> Enum.map(fn role ->
+        bullets =
+          role["bullets"]
+          |> Enum.map(fn bullet -> "- #{bullet["selected_text"]}" end)
+          |> Enum.join("\n")
 
-      """
-      ### #{role["title"]} at #{role["company"]}
-      #{bullets}
-      """
-    end)
-    |> Enum.join("\n\n")
+        """
+        ### #{role["title"]} at #{role["company"]}
+        #{bullets}
+        """
+      end)
+      |> Enum.join("\n\n")
 
     header <> roles_md
   end
@@ -455,11 +512,13 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     text_clean = String.trim(text)
 
     # Remove markdown code fences if present
-    json_text = case text_clean do
-      "```json\n" <> rest -> String.slice(rest, 0..-5//-1)  # Remove trailing ```
-      "```" <> rest -> String.slice(rest, 0..-5//-1)
-      _ -> text_clean
-    end
+    json_text =
+      case text_clean do
+        # Remove trailing ```
+        "```json\n" <> rest -> String.slice(rest, 0..-5//-1)
+        "```" <> rest -> String.slice(rest, 0..-5//-1)
+        _ -> text_clean
+      end
 
     case Jason.decode(json_text) do
       {:ok, data} when is_map(data) ->
@@ -500,7 +559,8 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     }
   end
 
-  defp fill_contact_placeholders(cover_letter, resume) when is_binary(cover_letter) and is_map(resume) do
+  defp fill_contact_placeholders(cover_letter, resume)
+       when is_binary(cover_letter) and is_map(resume) do
     identity = resume["identity"] || %{}
     name = identity["name"] || "[Your Name]"
     email = identity["email"] || "[Your Email]"
@@ -508,21 +568,27 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
     linkedin = identity["linkedin"] || "[Your LinkedIn / Portfolio]"
 
     # Build contact signature line (only include fields that have actual values)
-    contact_line = Enum.reject([
-      if(email != "[Your Email]", do: email),
-      if(phone != "[Your Phone]", do: phone),
-      if(linkedin != "[Your LinkedIn / Portfolio]", do: linkedin)
-    ], &is_nil/1) |> Enum.join(" | ")
+    contact_line =
+      Enum.reject(
+        [
+          if(email != "[Your Email]", do: email),
+          if(phone != "[Your Phone]", do: phone),
+          if(linkedin != "[Your LinkedIn / Portfolio]", do: linkedin)
+        ],
+        &is_nil/1
+      )
+      |> Enum.join(" | ")
 
-    letter = cover_letter
-    |> String.replace("[Your Name]", name)
-    |> String.replace("*[Your Name]*", "*#{name}*")
-    |> String.replace("[your name]", name)
-    |> String.replace("[Your Email]", email)
-    |> String.replace("[Your Phone]", phone)
-    |> String.replace("[Your LinkedIn / Portfolio]", linkedin)
-    |> String.replace("[Your LinkedIn / Portfolio URL]", linkedin)
-    |> String.replace("[Your Email] | [Your Phone] | [Your LinkedIn / Portfolio]", contact_line)
+    letter =
+      cover_letter
+      |> String.replace("[Your Name]", name)
+      |> String.replace("*[Your Name]*", "*#{name}*")
+      |> String.replace("[your name]", name)
+      |> String.replace("[Your Email]", email)
+      |> String.replace("[Your Phone]", phone)
+      |> String.replace("[Your LinkedIn / Portfolio]", linkedin)
+      |> String.replace("[Your LinkedIn / Portfolio URL]", linkedin)
+      |> String.replace("[Your Email] | [Your Phone] | [Your LinkedIn / Portfolio]", contact_line)
 
     # Standardize signature format
     standardize_signature(letter, name, contact_line)
@@ -534,9 +600,16 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
 
   defp standardize_signature(cover_letter, name, contact_line) do
     # Remove any existing signature variations and replace with standard format
-    letter_without_old_sig = cover_letter
-    |> String.replace(~r/---?\s*\n\s*(?:Best regards|Sincerely|Thanks|Warm regards)[^\n]*\n[^\n]*\n?/i, "")
-    |> String.replace(~r/\n\s*(?:Best regards|Sincerely|Thanks|Warm regards|Respectfully)[^\n]*\n/i, "\n")
+    letter_without_old_sig =
+      cover_letter
+      |> String.replace(
+        ~r/---?\s*\n\s*(?:Best regards|Sincerely|Thanks|Warm regards)[^\n]*\n[^\n]*\n?/i,
+        ""
+      )
+      |> String.replace(
+        ~r/\n\s*(?:Best regards|Sincerely|Thanks|Warm regards|Respectfully)[^\n]*\n/i,
+        "\n"
+      )
 
     # Ensure standard signature at end
     letter_without_old_sig

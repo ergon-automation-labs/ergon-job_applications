@@ -34,7 +34,8 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   Synchronously returns tag-scored results immediately,
   then fires async LLM requests for each result.
   """
-  def handle_recommend(message, reply_to, conn) when is_map(message) and is_binary(reply_to) and is_binary(reply_to) do
+  def handle_recommend(message, reply_to, conn)
+      when is_map(message) and is_binary(reply_to) and is_binary(reply_to) do
     %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
@@ -48,49 +49,58 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
             case listing_store().list(tenant_id, []) do
               {:ok, listings} ->
                 # Synchronous: tag overlap scoring
-                Logger.info("handle_recommend: Resume has #{length(resume["skills"] || [])} skills and #{length(resume["roles"] || [])} roles")
+                Logger.info(
+                  "handle_recommend: Resume has #{length(resume["skills"] || [])} skills and #{length(resume["roles"] || [])} roles"
+                )
+
                 Logger.debug("Resume skills: #{inspect(resume["skills"])}")
                 Logger.debug("Sample listing: #{inspect(List.first(listings))}")
 
                 scored_pairs = RecommendationScorer.shortlist(listings, resume, limit)
-                recommendations = Enum.map(scored_pairs, fn {listing, score} ->
-                  role_title = listing["role_title"]
-                  jd_text = listing["jd_text"]
-                  required_skills = extract_required_skills(jd_text)
 
-                  # Merge extracted fields into listing
-                  enriched_listing = Map.merge(listing, %{
-                    "seniority_level" => extract_seniority(role_title),
-                    "role_type" => extract_role_type(role_title),
-                    "salary_range" => listing["salary_range"] || extract_salary(jd_text),
-                    "location" => listing["location"] || extract_location(jd_text),
-                    "required_skills" => required_skills
-                  })
+                recommendations =
+                  Enum.map(scored_pairs, fn {listing, score} ->
+                    role_title = listing["role_title"]
+                    jd_text = listing["jd_text"]
+                    required_skills = extract_required_skills(jd_text)
 
-                  # Check if matches target profile and apply score boost
-                  target_match = matches_target_profile?(enriched_listing, resume)
-                  boosted_score = if target_match, do: score * 1.25, else: score
+                    # Merge extracted fields into listing
+                    enriched_listing =
+                      Map.merge(listing, %{
+                        "seniority_level" => extract_seniority(role_title),
+                        "role_type" => extract_role_type(role_title),
+                        "salary_range" => listing["salary_range"] || extract_salary(jd_text),
+                        "location" => listing["location"] || extract_location(jd_text),
+                        "required_skills" => required_skills
+                      })
 
-                  %{
-                    "listing" => enriched_listing,
-                    "score" => (boosted_score * 100) |> Float.round(0) |> trunc(),
-                    "reason" => "Tag match",
-                    "target_match" => target_match
-                  }
-                end)
+                    # Check if matches target profile and apply score boost
+                    target_match = matches_target_profile?(enriched_listing, resume)
+                    boosted_score = if target_match, do: score * 1.25, else: score
+
+                    %{
+                      "listing" => enriched_listing,
+                      "score" => (boosted_score * 100) |> Float.round(0) |> trunc(),
+                      "reason" => "Tag match",
+                      "target_match" => target_match
+                    }
+                  end)
 
                 # Reply immediately with tag-scored results
-                reply_body = Jason.encode!(%{
-                  "ok" => true,
-                  "recommendations" => recommendations,
-                  "total_scored" => length(recommendations)
-                })
+                reply_body =
+                  Jason.encode!(%{
+                    "ok" => true,
+                    "recommendations" => recommendations,
+                    "total_scored" => length(recommendations)
+                  })
 
                 if conn do
                   Gnat.pub(conn, reply_to, reply_body)
                 end
 
-                Logger.info("Sent recommendations: #{length(recommendations)} scored (tag overlap), LLM enrichment in background")
+                Logger.info(
+                  "Sent recommendations: #{length(recommendations)} scored (tag overlap), LLM enrichment in background"
+                )
 
                 # Asynchronously: fire LLM requests for each shortlist item
                 fire_async_llm_requests(scored_pairs, resume)
@@ -128,16 +138,20 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
     case RecommendationScorer.parse_llm_score_response(payload["completion"] || "") do
       {:ok, score, reason} ->
-        Logger.info("LLM scored listing #{listing_id} (resume: #{resume_id}): #{(score * 100) |> trunc()}%")
+        Logger.info(
+          "LLM scored listing #{listing_id} (resume: #{resume_id}): #{(score * 100) |> trunc()}%"
+        )
 
         # Update listing with score + reason
         case listing_store().update(tenant_id, listing_id, %{
-          "recommendation_score" => score,
-          "recommendation_reason" => reason,
-          "scored_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
-        }) do
+               "recommendation_score" => score,
+               "recommendation_reason" => reason,
+               "scored_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+             }) do
           {:ok, listing} ->
-            Logger.info("Updated listing #{listing_id} with recommendation score: #{(score * 100) |> trunc()}%")
+            Logger.info(
+              "Updated listing #{listing_id} with recommendation score: #{(score * 100) |> trunc()}%"
+            )
 
             # If score >= 0.80 and not yet pushed to GTD, push it (if GTD integration enabled)
             if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
@@ -208,11 +222,16 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     Task.start(fn ->
       Logger.info("rescore_all: triggered by resume update")
 
-      case resume_store().list() do
+      tenant_id = tenant_id()
+
+      case resume_store().list(tenant_id) do
         {:ok, [resume | _]} ->
-          case listing_store().list([]) do
+          case listing_store().list(tenant_id) do
             {:ok, listings} ->
-              Logger.info("rescore_all: re-scoring #{length(listings)} listings with updated resume")
+              Logger.info(
+                "rescore_all: re-scoring #{length(listings)} listings with updated resume"
+              )
+
               scored_pairs = RecommendationScorer.shortlist(listings, resume, 20)
               fire_async_llm_requests(scored_pairs, resume)
 
@@ -244,12 +263,14 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   ]
 
   defp extract_seniority(nil), do: nil
+
   defp extract_seniority(role_title) when is_binary(role_title) do
     case Enum.find(@seniority_patterns, fn {pattern, _} -> Regex.match?(pattern, role_title) end) do
       {_, level} -> level
       nil -> nil
     end
   end
+
   defp extract_seniority(_), do: nil
 
   @role_type_patterns [
@@ -263,30 +284,35 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   ]
 
   defp extract_role_type(nil), do: nil
+
   defp extract_role_type(role_title) when is_binary(role_title) do
     case Enum.find(@role_type_patterns, fn {pattern, _} -> Regex.match?(pattern, role_title) end) do
       {_, type} -> type
       nil -> nil
     end
   end
+
   defp extract_role_type(_), do: nil
 
   # Salary and location extraction from JD text
 
   @salary_patterns [
-    ~r/\$?([\d,]+)\s*(?:k|K)\s*-\s*\$?([\d,]+)\s*(?:k|K)/,  # $100k-$150k or 100k-150k
-    ~r/\$?([\d,]+)\s*(?:k|K)\s*(?:per|p\/|\/)/,             # $100k per year
-    ~r/\$?([\d,]+)(?:,\d{3})\s*-\s*\$?([\d,]+)(?:,\d{3})/  # $100,000 - $150,000
+    # $100k-$150k or 100k-150k
+    ~r/\$?([\d,]+)\s*(?:k|K)\s*-\s*\$?([\d,]+)\s*(?:k|K)/,
+    # $100k per year
+    ~r/\$?([\d,]+)\s*(?:k|K)\s*(?:per|p\/|\/)/,
+    # $100,000 - $150,000
+    ~r/\$?([\d,]+)(?:,\d{3})\s*-\s*\$?([\d,]+)(?:,\d{3})/
   ]
 
   defp extract_salary(jd_text) when is_binary(jd_text) and jd_text != "" do
     case Enum.find_value(@salary_patterns, fn pattern ->
-      case Regex.scan(pattern, jd_text) do
-        [[match | _]] -> match
-        [[_, min, max | _]] -> "#{min}k-#{max}k"
-        _ -> nil
-      end
-    end) do
+           case Regex.scan(pattern, jd_text) do
+             [[match | _]] -> match
+             [[_, min, max | _]] -> "#{min}k-#{max}k"
+             _ -> nil
+           end
+         end) do
       nil -> nil
       salary -> %{"range" => salary}
     end
@@ -335,7 +361,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     {"linux", "Linux"},
     {"bash", "Bash"},
     {"sql", "SQL"},
-    {"postgresql", "PostgreSQL"},
+    {"postgresql", "PostgreSQL"}
   ]
 
   defp extract_required_skills(jd_text) when is_binary(jd_text) and jd_text != "" do
@@ -372,7 +398,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
       listing_skills = listing["required_skills"] || []
       listing_location = listing["location"] || %{}
 
-      seniority_match = Enum.empty?(target_seniority) or (listing_seniority in target_seniority)
+      seniority_match = Enum.empty?(target_seniority) or listing_seniority in target_seniority
 
       role_match =
         Enum.empty?(target_roles) or
@@ -388,7 +414,8 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
             end)
           end)
 
-      location_match = Enum.empty?(location_prefs) or matches_location?(listing_location, location_prefs)
+      location_match =
+        Enum.empty?(location_prefs) or matches_location?(listing_location, location_prefs)
 
       seniority_match and role_match and skill_match and location_match
     end
@@ -417,16 +444,23 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
       pref_lower = String.downcase(pref)
 
       cond do
-        pref_lower == "remote" -> location_type == "remote"
-        pref_lower == "hybrid" -> location_type == "hybrid"
+        pref_lower == "remote" ->
+          location_type == "remote"
+
+        pref_lower == "hybrid" ->
+          location_type == "hybrid"
+
         String.contains?(pref_lower, ",") ->
           # Handle "City, ST" format
           [pref_city, pref_state] = pref_lower |> String.split(",") |> Enum.map(&String.trim/1)
-          location_city == String.downcase(pref_city) and location_state == String.downcase(pref_state)
+
+          location_city == String.downcase(pref_city) and
+            location_state == String.downcase(pref_state)
 
         true ->
           # Partial match on city name
-          String.contains?(location_city, pref_lower) or String.contains?(location_state, pref_lower)
+          String.contains?(location_city, pref_lower) or
+            String.contains?(location_state, pref_lower)
       end
     end)
   end
@@ -472,18 +506,19 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
         Logger.info("Publishing LLM request for listing #{listing_id} with resume #{resume_id}")
 
-        result = Publisher.publish_llm_request_with_metadata(
-          %{
-            "text" => prompt,
-            "prompt_id" => "job_recommendation_#{listing_id}"
-          },
-          "job_recommendation",
-          nil,
-          %{
-            "listing_id" => listing_id,
-            "resume_id" => resume_id
-          }
-        )
+        result =
+          Publisher.publish_llm_request_with_metadata(
+            %{
+              "text" => prompt,
+              "prompt_id" => "job_recommendation_#{listing_id}"
+            },
+            "job_recommendation",
+            nil,
+            %{
+              "listing_id" => listing_id,
+              "resume_id" => resume_id
+            }
+          )
 
         Logger.info("Published LLM request result: #{inspect(result)}")
       rescue
@@ -561,4 +596,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   defp resume_store do
     Application.get_env(:bot_army_job_applications, :resume_store, ResumeStore)
   end
+
+  defp tenant_id,
+    do: System.get_env("BOT_ARMY_TENANT_ID", "00000000-0000-0000-0000-000000000001")
 end
