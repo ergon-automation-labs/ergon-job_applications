@@ -9,6 +9,11 @@ set -e
 # Use absolute paths since git hooks have limited environment
 MIX_BIN="/Users/abby/.local/share/mise/shims/mix"
 
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+export HEX_HOME="$REPO_ROOT/.cache/hex"
+export MIX_HOME="$REPO_ROOT/.cache/mix"
+mkdir -p "$HEX_HOME" "$MIX_HOME"
+
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 # Only enforce checks on main branch
