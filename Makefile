@@ -1,6 +1,6 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 
-.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -38,12 +38,13 @@ help:
 	@echo "  make scan-listings        - Scan and ingest jobs from configured boards"
 	@echo "  make scan                 - Full discovery + scan (all at once)"
 	@echo ""
-	@echo "Release commands (normally automatic via git hook):"
-	@echo "  make release         - Build OTP release locally (manual, if needed)"
-	@echo "  make publish-release - Build, package, and publish to GitHub (manual, if needed)"
+	@echo "Release commands:"
+	@echo "  make release         - Build OTP release locally"
+	@echo "  make publish-release - Build, package, and publish to GitHub"
 	@echo ""
 	@echo "Normal workflow:"
-	@echo "  git push             - Pre-push hook validates, builds, and publishes automatically"
+	@echo "  git push             - Fast compile+test validation"
+	@echo "  make push-and-publish - Push then publish release asset"
 	@echo ""
 
 setup: init deps setup-hooks setup-db
@@ -170,6 +171,9 @@ stop:
 
 restart:
 	docker compose restart
+
+push-and-publish:
+	@git push && $(MAKE) publish-release
 
 logs:
 	docker compose logs -f job_applications
