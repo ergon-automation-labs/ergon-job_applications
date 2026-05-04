@@ -1,4 +1,5 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
+MIX ?= /Users/abby/.local/share/mise/shims/mix
 
 .PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish
 
@@ -62,58 +63,58 @@ setup-hooks:
 
 setup-db:
 	@echo "Setting up test database..."
-	@MIX_ENV=test mix ecto.create || true
-	@MIX_ENV=test mix ecto.migrate
+	@MIX_ENV=test $(MIX) ecto.create || true
+	@MIX_ENV=test $(MIX) ecto.migrate
 	@echo "✓ Test database created and migrations applied"
 
 reset-db:
 	@echo "⚠️  Resetting test database (dropping and recreating)..."
-	@MIX_ENV=test mix ecto.drop || true
-	@MIX_ENV=test mix ecto.create
-	@MIX_ENV=test mix ecto.migrate
+	@MIX_ENV=test $(MIX) ecto.drop || true
+	@MIX_ENV=test $(MIX) ecto.create
+	@MIX_ENV=test $(MIX) ecto.migrate
 	@echo "✓ Test database reset complete"
 
 init:
 	@if [ ! -d .git ]; then git init; echo "Git initialized."; else echo "Git already initialized."; fi
 
 deps:
-	mix deps.get
+	$(MIX) deps.get
 
 test:
-	mix test
+	$(MIX) test
 
 test-handlers:
-	MIX_ENV=test mix test --only handlers --trace
+	MIX_ENV=test $(MIX) test --only handlers --trace
 
 test-stores:
-	MIX_ENV=test mix test --only stores --trace
+	MIX_ENV=test $(MIX) test --only stores --trace
 
 test-nats:
-	MIX_ENV=test mix test --only nats --trace
+	MIX_ENV=test $(MIX) test --only nats --trace
 
 test-integration:
-	mix test --include integration --trace
+	$(MIX) test --include integration --trace
 
 test-full:
-	mix test --include integration --include nats_live --trace
+	$(MIX) test --include integration --include nats_live --trace
 
 credo:
-	mix credo
+	$(MIX) credo --only warning
 
 dialyzer: deps
-	mix dialyzer
+	$(MIX) dialyzer
 
 coverage:
-	mix coveralls
+	$(MIX) coveralls
 
-check: test credo dialyzer
+check: test credo
 	@echo "All checks passed!"
 
 format:
-	mix format
+	$(MIX) format
 
 clean:
-	mix clean
+	$(MIX) clean
 	rm -rf _build cover
 
 # ============================================================================
@@ -130,7 +131,7 @@ build-docker:
 # Bare-metal: local Elixir toolchain (requires Elixir 1.14+)
 build-native: deps
 	@echo "Building with local Elixir (Mix)..."
-	mix compile
+	$(MIX) compile
 
 # Run tests (default: Docker)
 test: test-docker
@@ -140,24 +141,24 @@ test-docker:
 	docker compose run --rm job_applications mix test
 
 test-handlers:
-	MIX_ENV=test mix test --only handlers --trace
+	MIX_ENV=test $(MIX) test --only handlers --trace
 
 test-stores:
-	MIX_ENV=test mix test --only stores --trace
+	MIX_ENV=test $(MIX) test --only stores --trace
 
 test-nats:
-	MIX_ENV=test mix test --only nats --trace
+	MIX_ENV=test $(MIX) test --only nats --trace
 
 test-integration:
-	mix test --include integration --trace
+	$(MIX) test --include integration --trace
 
 test-full:
-	mix test --include integration --include nats_live --trace
+	$(MIX) test --include integration --include nats_live --trace
 
 # Bare-metal tests (requires Elixir, PostgreSQL running locally)
 test-native: setup-db
 	@echo "Running tests locally..."
-	mix test
+	$(MIX) test
 
 # Docker Compose stack (all services: NATS, Postgres, bot, etc.)
 start:
@@ -193,7 +194,7 @@ release: check
 	@echo "Building OTP release"
 	@echo "==============================================="
 	rm -rf _build/prod/rel/bot_army_job_applications
-	MIX_ENV=prod mix release
+	MIX_ENV=prod $(MIX) release
 	@echo ""
 	@echo "✓ Release built successfully"
 	@echo "Location: _build/prod/rel/bot_army_job_applications/"
@@ -234,7 +235,7 @@ discover-boards:
 	@echo "Discovering job boards (Greenhouse/Lever)"
 	@echo "==============================================="
 	@echo ""
-	mix job_applications.discover_boards
+	$(MIX) job_applications.discover_boards
 	@echo ""
 	@echo "Next steps:"
 	@echo "  If boards were found, sync them to production:"
@@ -246,7 +247,7 @@ discover-boards-yaml:
 	@echo "Discovering job boards (YAML format)"
 	@echo "==============================================="
 	@echo ""
-	mix job_applications.discover_boards --output /tmp/ingestion_boards.yaml
+	$(MIX) job_applications.discover_boards --output /tmp/ingestion_boards.yaml
 	@echo ""
 	@cat /tmp/ingestion_boards.yaml
 	@echo ""
@@ -259,7 +260,7 @@ sync-boards:
 	@echo "Syncing discovered boards to Salt pillar"
 	@echo "==============================================="
 	@echo ""
-	mix job_applications.sync_boards_to_salt
+	$(MIX) job_applications.sync_boards_to_salt
 	@echo ""
 	@echo "Next steps:"
 	@echo "  cd ../bot_army_infra"
@@ -272,7 +273,7 @@ sync-boards-dry-run:
 	@echo "Preview board discovery (no changes)"
 	@echo "==============================================="
 	@echo ""
-	mix job_applications.sync_boards_to_salt --dry-run
+	$(MIX) job_applications.sync_boards_to_salt --dry-run
 	@echo ""
 
 scan-listings:

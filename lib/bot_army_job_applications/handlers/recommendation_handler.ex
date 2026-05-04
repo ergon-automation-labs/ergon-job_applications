@@ -482,7 +482,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
   defp get_default_resume(tenant_id, _) do
     case resume_store().list(tenant_id) do
-      {:ok, resumes} when is_list(resumes) and length(resumes) > 0 ->
+      {:ok, resumes} when is_list(resumes) and resumes != [] ->
         # Return first resume (already a map from store)
         {:ok, List.first(resumes)}
 

@@ -87,7 +87,9 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
             "interview_prep_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
           })
 
-        case application_store().update(tenant_id, application_id, %{"artifacts" => updated_artifacts}) do
+        case application_store().update(tenant_id, application_id, %{
+               "artifacts" => updated_artifacts
+             }) do
           {:ok, updated_application} ->
             Logger.info(
               "Interview prep generated and stored for application #{application_id} (#{updated_application["company"]} — #{updated_application["role_title"]})"
@@ -102,11 +104,15 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
             end
 
           {:error, reason} ->
-            Logger.error("Failed to store interview prep for #{application_id}: #{inspect(reason)}")
+            Logger.error(
+              "Failed to store interview prep for #{application_id}: #{inspect(reason)}"
+            )
         end
 
       {:error, reason} ->
-        Logger.error("Failed to fetch application #{application_id} for prep storage: #{inspect(reason)}")
+        Logger.error(
+          "Failed to fetch application #{application_id} for prep storage: #{inspect(reason)}"
+        )
     end
   end
 
@@ -125,7 +131,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
 
   defp get_default_resume(tenant_id) do
     case resume_store().list(tenant_id) do
-      {:ok, resumes} when is_list(resumes) and length(resumes) > 0 ->
+      {:ok, resumes} when is_list(resumes) and resumes != [] ->
         {:ok, List.first(resumes)}
 
       {:ok, _} ->

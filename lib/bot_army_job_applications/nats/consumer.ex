@@ -712,14 +712,14 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
   defp tenant_id,
     do: System.get_env("BOT_ARMY_TENANT_ID", "00000000-0000-0000-0000-000000000001")
+
   @impl true
   def handle_info(:registry_heartbeat, state) do
-    if length(state.subscriptions) > 0 do
+    if state.subscriptions != [] do
       BotArmyRuntime.Registry.register("job_applications", @subjects, @version)
       Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
     end
 
     {:noreply, state}
   end
-
 end
