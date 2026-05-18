@@ -1,6 +1,8 @@
-defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
+defmodule ApplicationHandlerTest do
   use ExUnit.Case, async: true
   @moduletag :handlers
+
+  alias ApplicationHandler
 
   describe "handle_create/1" do
     test "validates required fields: company" do
@@ -14,7 +16,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
       }
 
       # Should not raise, but should reject invalid data
-      result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_create(message)
+      result = ApplicationHandler.handle_create(message)
       assert result == :ok
     end
 
@@ -28,7 +30,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_create(message)
+      result = ApplicationHandler.handle_create(message)
       assert result == :ok
     end
 
@@ -39,7 +41,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
         "user_id" => nil
       }
 
-      result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_create(message)
+      result = ApplicationHandler.handle_create(message)
       assert result == :ok
     end
   end
@@ -55,7 +57,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_transition(message)
+      result = ApplicationHandler.handle_transition(message)
       assert result == :ok
     end
 
@@ -67,7 +69,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_transition(message)
+      result = ApplicationHandler.handle_transition(message)
       assert result == :ok
     end
 
@@ -79,7 +81,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.ApplicationHandler.handle_transition(message)
+      result = ApplicationHandler.handle_transition(message)
       assert result == :ok
     end
   end

@@ -1,7 +1,9 @@
-defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
+defmodule EmailSignalHandlerTest do
   use ExUnit.Case, async: false
   @moduletag :handlers
   import Mox
+
+  alias EmailSignalHandler
 
   setup :verify_on_exit!
 
@@ -56,7 +58,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+      result = EmailSignalHandler.handle_email_signal(message)
 
       assert {:ok, {:signal_detected, signal}} = result
       assert is_map(signal)
@@ -89,7 +91,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
       }
 
       {:ok, {:signal_detected, signal}} =
-        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+        EmailSignalHandler.handle_email_signal(message)
 
       assert signal["type"] == "interview_invite"
       assert signal["proposed_transition"] == "phone_screen"
@@ -122,7 +124,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
       }
 
       {:ok, {:signal_detected, signal}} =
-        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+        EmailSignalHandler.handle_email_signal(message)
 
       assert signal["type"] == "offer"
       assert signal["proposed_transition"] == "offer"
@@ -155,7 +157,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
       }
 
       {:ok, {:signal_detected, signal}} =
-        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+        EmailSignalHandler.handle_email_signal(message)
 
       assert signal["type"] == "rejection"
       assert signal["proposed_transition"] == "rejected"
@@ -188,7 +190,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+      result = EmailSignalHandler.handle_email_signal(message)
 
       assert result == {:ok, :no_match}
     end
@@ -207,7 +209,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+      result = EmailSignalHandler.handle_email_signal(message)
 
       assert result == {:error, :invalid_payload}
     end
@@ -219,7 +221,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         "payload" => nil
       }
 
-      result = BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+      result = EmailSignalHandler.handle_email_signal(message)
 
       assert result == {:error, :invalid_payload}
     end
@@ -252,7 +254,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
       }
 
       {:ok, {:signal_detected, _signal}} =
-        BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+        EmailSignalHandler.handle_email_signal(message)
     end
 
     test "matches by email domain when subject doesn't contain company name", %{app: app} do
@@ -281,7 +283,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.EmailSignalHandler.handle_email_signal(message)
+      result = EmailSignalHandler.handle_email_signal(message)
 
       assert {:ok, {:signal_detected, signal}} = result
       assert is_map(signal)

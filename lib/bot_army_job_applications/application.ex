@@ -105,9 +105,9 @@ defmodule BotArmyJobApplications.Application do
     if @env == :test,
       do: children,
       else: [
-        {BotArmyJobApplications.HealthResponder,
-         [bot_name: :job_applications, repo: BotArmyJobApplications.Repo, version: "0.2.31"]},
-        {BotArmyRuntime.Health.Monitor, []} | children
+        {BotArmyRuntime.Health.Responder,
+         [bot_name: :job_applications, repo: BotArmyJobApplications.Repo, version: "0.2.31"]}
+        | children
       ]
   end
 end

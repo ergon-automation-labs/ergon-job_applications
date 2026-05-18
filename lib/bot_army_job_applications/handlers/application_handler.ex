@@ -10,13 +10,20 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
 
   require Logger
 
+  alias BotArmyJobApplications.ApplicationStore
+  alias BotArmyJobApplications.ListingStore
+  alias BotArmyJobApplications.ApplicationSupervisor
+  alias BotArmyJobApplications.ApplicationServer
+  alias BotArmyJobApplications.NATS.Publisher
+  alias BotArmyCore.Tenant
+
   @gtd_trigger_states ["phone_screen", "technical", "offer"]
 
   defp application_store do
     Application.get_env(
       :bot_army_job_applications,
       :application_store,
-      BotArmyJobApplications.ApplicationStore
+      ApplicationStore
     )
   end
 
@@ -24,7 +31,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
     Application.get_env(
       :bot_army_job_applications,
       :listing_store,
-      BotArmyJobApplications.ListingStore
+      ListingStore
     )
   end
 
@@ -34,7 +41,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   Creates a new job application and starts the ApplicationServer.
   """
   def handle_create(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"] || %{}
 
@@ -53,7 +60,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
         case create_application(stamped_payload) do
           {:ok, application} ->
             # Start ApplicationServer for this application
-            BotArmyJobApplications.ApplicationSupervisor.start_child(application["id"])
+            ApplicationSupervisor.start_child(application["id"])
 
             Logger.info("Application created: #{application["id"]}, event_id: #{event_id}")
             publish_application_created(application, event_id)
@@ -61,7 +68,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, reason} ->
             Logger.error("Failed to create application: #{inspect(reason)}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               reason,
               "Failed to create application"
@@ -71,7 +78,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       {:error, reason} ->
         Logger.warning("Invalid application creation payload: #{inspect(reason)}")
 
-        BotArmyJobApplications.NATS.Publisher.publish_error(
+        Publisher.publish_error(
           event_id,
           reason,
           "Invalid application data"
@@ -86,7 +93,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   then clears the pending signal.
   """
   def handle_confirm_signal(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = Tenant.extract_context(message)
     payload = message["payload"]
     event_id = message["event_id"]
 
@@ -107,7 +114,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
               }
 
               # Transition to the proposed state
-              case BotArmyJobApplications.ApplicationServer.transition(
+              case ApplicationServer.transition(
                      application_id,
                      to_state,
                      metadata
@@ -135,7 +142,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
                     "Failed to transition application #{application_id}: #{inspect(reason)}"
                   )
 
-                  BotArmyJobApplications.NATS.Publisher.publish_error(
+                  Publisher.publish_error(
                     event_id,
                     reason,
                     "Failed to confirm signal"
@@ -148,7 +155,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, :not_found} ->
             Logger.error("Application not found: #{application_id}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               :not_found,
               "Application not found"
@@ -157,7 +164,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, reason} ->
             Logger.error("Failed to get application #{application_id}: #{inspect(reason)}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               reason,
               "Failed to confirm signal"
@@ -167,7 +174,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       {:error, reason} ->
         Logger.warning("Invalid confirm signal payload: #{inspect(reason)}")
 
-        BotArmyJobApplications.NATS.Publisher.publish_error(
+        Publisher.publish_error(
           event_id,
           reason,
           "Invalid confirm signal data"
@@ -181,7 +188,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   Clears the pending signal without applying any state transition.
   """
   def handle_dismiss_signal(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = Tenant.extract_context(message)
     payload = message["payload"]
     event_id = message["event_id"]
 
@@ -197,7 +204,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, :not_found} ->
             Logger.error("Application not found: #{application_id}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               :not_found,
               "Application not found"
@@ -206,7 +213,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, reason} ->
             Logger.error("Failed to dismiss signal for #{application_id}: #{inspect(reason)}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               reason,
               "Failed to dismiss signal"
@@ -216,7 +223,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       {:error, reason} ->
         Logger.warning("Invalid dismiss signal payload: #{inspect(reason)}")
 
-        BotArmyJobApplications.NATS.Publisher.publish_error(
+        Publisher.publish_error(
           event_id,
           reason,
           "Invalid dismiss signal data"
@@ -239,7 +246,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
         to_state = payload["to_state"]
         metadata = Map.get(payload, "metadata", %{})
 
-        case BotArmyJobApplications.ApplicationServer.transition(
+        case ApplicationServer.transition(
                application_id,
                to_state,
                metadata
@@ -260,7 +267,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, :invalid_transition} ->
             Logger.warning("Invalid transition for application: #{application_id}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               :invalid_transition,
               "Invalid state transition"
@@ -269,7 +276,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, :not_found} ->
             Logger.error("Application not found: #{application_id}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               :not_found,
               "Application not found"
@@ -278,7 +285,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           {:error, reason} ->
             Logger.error("Failed to transition application: #{inspect(reason)}")
 
-            BotArmyJobApplications.NATS.Publisher.publish_error(
+            Publisher.publish_error(
               event_id,
               reason,
               "Failed to transition application"
@@ -288,7 +295,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       {:error, reason} ->
         Logger.warning("Invalid transition payload: #{inspect(reason)}")
 
-        BotArmyJobApplications.NATS.Publisher.publish_error(
+        Publisher.publish_error(
           event_id,
           reason,
           "Invalid transition data"
@@ -397,7 +404,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       }
     }
 
-    BotArmyJobApplications.NATS.Publisher.publish(event)
+    Publisher.publish(event)
   end
 
   defp publish_state_updated(application, event_id) do
@@ -419,7 +426,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       }
     }
 
-    BotArmyJobApplications.NATS.Publisher.publish(event)
+    Publisher.publish(event)
   end
 
   defp create_gtd_task(application, state) do
@@ -469,7 +476,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       "payload" => gtd_payload
     }
 
-    BotArmyJobApplications.NATS.Publisher.publish(gtd_event)
+    Publisher.publish(gtd_event)
   end
 
   defp is_valid_for_gtd?(application) do
@@ -535,7 +542,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
       }
     }
 
-    BotArmyJobApplications.NATS.Publisher.publish(event)
+    Publisher.publish(event)
   end
 
   defp get_node_name do

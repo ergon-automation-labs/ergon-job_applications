@@ -1,8 +1,10 @@
-defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
+defmodule DigestHandlerTest do
   use ExUnit.Case, async: false
   @moduletag :handlers
 
   import Mox
+
+  alias DigestHandler
 
   setup :verify_on_exit!
 
@@ -14,7 +16,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
 
   describe "build_digest/1" do
     test "returns empty digest for empty application list" do
-      digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest([])
+      digest = DigestHandler.build_digest([])
 
       assert digest["total_active"] == 0
       assert digest["total_terminal"] == 0
@@ -59,7 +61,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
         }
       ]
 
-      digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)
+      digest = DigestHandler.build_digest(apps)
 
       assert digest["total_active"] == 2
       assert digest["total_terminal"] == 2
@@ -99,7 +101,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
         }
       ]
 
-      digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)
+      digest = DigestHandler.build_digest(apps)
 
       assert length(digest["pending_signals"]) == 1
       assert digest["pending_signals"] |> Enum.at(0) |> Map.get("company") == "Acme"
@@ -128,7 +130,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
         }
       ]
 
-      digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)
+      digest = DigestHandler.build_digest(apps)
 
       assert length(digest["stalled"]) == 1
       assert digest["stalled"] |> Enum.at(0) |> Map.get("company") == "Stale Corp"
@@ -173,7 +175,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
         }
       ]
 
-      digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)
+      digest = DigestHandler.build_digest(apps)
 
       # Only recent activity should be included
       assert length(digest["recent_activity"]) == 1
@@ -209,7 +211,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandlerTest do
       )
 
       # Call handle_request
-      result = BotArmyJobApplications.Handlers.DigestHandler.handle_request(message)
+      result = DigestHandler.handle_request(message)
 
       # Should succeed (no exception)
       assert result == :ok or is_map(result)

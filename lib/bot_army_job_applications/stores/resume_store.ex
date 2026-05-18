@@ -11,6 +11,11 @@ defmodule BotArmyJobApplications.ResumeStore do
   require Logger
   import Ecto.Query
 
+  alias BotArmyJobApplications.Repo
+  alias BotArmyJobApplications.Schemas.Resume
+  alias ResumeRole
+  alias Skill
+
   @server __MODULE__
 
   def start_link(opts) do
@@ -58,7 +63,7 @@ defmodule BotArmyJobApplications.ResumeStore do
 
     state =
       try do
-        resumes = BotArmyJobApplications.Repo.all(BotArmyJobApplications.Schemas.Resume)
+        resumes = Repo.all(Resume)
 
         Enum.reduce(resumes, %{}, fn resume, acc ->
           Map.put(acc, resume.id |> to_string(), schema_to_map(resume))
@@ -77,8 +82,8 @@ defmodule BotArmyJobApplications.ResumeStore do
     resume_id = Ecto.UUID.generate()
 
     changeset =
-      BotArmyJobApplications.Schemas.Resume.changeset(
-        %BotArmyJobApplications.Schemas.Resume{id: resume_id},
+      Resume.changeset(
+        %Resume{id: resume_id},
         %{
           "tenant_id" => payload["tenant_id"],
           "user_id" => Map.get(payload, "user_id"),
@@ -87,7 +92,7 @@ defmodule BotArmyJobApplications.ResumeStore do
         }
       )
 
-    case BotArmyJobApplications.Repo.insert(changeset) do
+    case Repo.insert(changeset) do
       {:ok, db_resume} ->
         resume = schema_to_map(db_resume)
         new_state = Map.put(state, resume_id, resume)
@@ -107,8 +112,8 @@ defmodule BotArmyJobApplications.ResumeStore do
     tenant_id = file_metadata["tenant_id"]
 
     changeset =
-      BotArmyJobApplications.Schemas.Resume.changeset(
-        %BotArmyJobApplications.Schemas.Resume{id: resume_id},
+      Resume.changeset(
+        %Resume{id: resume_id},
         %{
           "tenant_id" => tenant_id,
           "user_id" => Map.get(file_metadata, "user_id"),
@@ -119,15 +124,15 @@ defmodule BotArmyJobApplications.ResumeStore do
         }
       )
 
-    case BotArmyJobApplications.Repo.transaction(fn ->
-           case BotArmyJobApplications.Repo.insert(changeset) do
+    case Repo.transaction(fn ->
+           case Repo.insert(changeset) do
              {:ok, db_resume} ->
                create_roles_and_bullets!(resume_id, parsed_data, tenant_id)
                create_skills!(resume_id, parsed_data, tenant_id)
                {:ok, db_resume}
 
              {:error, changeset} ->
-               BotArmyJobApplications.Repo.rollback(changeset)
+               Repo.rollback(changeset)
            end
          end) do
       {:ok, db_resume} ->
@@ -155,11 +160,11 @@ defmodule BotArmyJobApplications.ResumeStore do
           resume_uuid = Ecto.UUID.cast!(resume_id)
 
           db_resume =
-            BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Resume, resume_uuid)
+            Repo.get(Resume, resume_uuid)
 
           if db_resume do
             changeset =
-              BotArmyJobApplications.Schemas.Resume.changeset(
+              Resume.changeset(
                 db_resume,
                 %{
                   "identity" => Map.get(payload, "identity", db_resume.identity),
@@ -167,7 +172,7 @@ defmodule BotArmyJobApplications.ResumeStore do
                 }
               )
 
-            case BotArmyJobApplications.Repo.update(changeset) do
+            case Repo.update(changeset) do
               {:ok, updated_db_resume} ->
                 updated_resume = schema_to_map(updated_db_resume)
                 new_state = Map.put(state, resume_id, updated_resume)
@@ -198,13 +203,13 @@ defmodule BotArmyJobApplications.ResumeStore do
           resume_uuid = Ecto.UUID.cast!(resume_id)
 
           db_resume =
-            BotArmyJobApplications.Repo.get(BotArmyJobApplications.Schemas.Resume, resume_uuid)
+            Repo.get(Resume, resume_uuid)
 
           if db_resume do
             identity = Map.get(parsed_data, "identity", %{})
 
             changeset =
-              BotArmyJobApplications.Schemas.Resume.changeset(
+              Resume.changeset(
                 db_resume,
                 %{
                   "identity" => identity,
@@ -212,17 +217,17 @@ defmodule BotArmyJobApplications.ResumeStore do
                 }
               )
 
-            case BotArmyJobApplications.Repo.transaction(fn ->
-                   case BotArmyJobApplications.Repo.update(changeset) do
+            case Repo.transaction(fn ->
+                   case Repo.update(changeset) do
                      {:ok, updated_db_resume} ->
-                       BotArmyJobApplications.Repo.delete_all(
-                         from(r in BotArmyJobApplications.Schemas.ResumeRole,
+                       Repo.delete_all(
+                         from(r in ResumeRole,
                            where: r.resume_id == ^resume_id
                          )
                        )
 
-                       BotArmyJobApplications.Repo.delete_all(
-                         from(s in BotArmyJobApplications.Schemas.Skill,
+                       Repo.delete_all(
+                         from(s in Skill,
                            where: s.resume_id == ^resume_id
                          )
                        )
@@ -232,7 +237,7 @@ defmodule BotArmyJobApplications.ResumeStore do
                        {:ok, updated_db_resume}
 
                      {:error, changeset} ->
-                       BotArmyJobApplications.Repo.rollback(changeset)
+                       Repo.rollback(changeset)
                    end
                  end) do
               {:ok, updated_db_resume} ->
@@ -264,42 +269,42 @@ defmodule BotArmyJobApplications.ResumeStore do
         else
           resume_uuid = Ecto.UUID.cast!(resume_id)
 
-          case BotArmyJobApplications.Repo.transaction(fn ->
+          case Repo.transaction(fn ->
                  role_ids =
-                   BotArmyJobApplications.Repo.all(
-                     from(r in BotArmyJobApplications.Schemas.ResumeRole,
+                   Repo.all(
+                     from(r in ResumeRole,
                        where: r.resume_id == ^resume_id,
                        select: r.id
                      )
                    )
 
                  if Enum.any?(role_ids) do
-                   BotArmyJobApplications.Repo.delete_all(
-                     from(b in BotArmyJobApplications.Schemas.ResumeBullet,
+                   Repo.delete_all(
+                     from(b in ResumeBullet,
                        where: b.role_id in ^role_ids
                      )
                    )
                  end
 
-                 BotArmyJobApplications.Repo.delete_all(
-                   from(r in BotArmyJobApplications.Schemas.ResumeRole,
+                 Repo.delete_all(
+                   from(r in ResumeRole,
                      where: r.resume_id == ^resume_id
                    )
                  )
 
-                 BotArmyJobApplications.Repo.delete_all(
-                   from(s in BotArmyJobApplications.Schemas.Skill,
+                 Repo.delete_all(
+                   from(s in Skill,
                      where: s.resume_id == ^resume_id
                    )
                  )
 
-                 case BotArmyJobApplications.Repo.delete_all(
-                        from(r in BotArmyJobApplications.Schemas.Resume,
+                 case Repo.delete_all(
+                        from(r in Resume,
                           where: r.id == ^resume_uuid
                         )
                       ) do
                    {_count, _} -> :ok
-                   _ -> BotArmyJobApplications.Repo.rollback(:delete_failed)
+                   _ -> Repo.rollback(:delete_failed)
                  end
                end) do
             {:ok, :ok} ->
@@ -348,11 +353,11 @@ defmodule BotArmyJobApplications.ResumeStore do
   @impl true
   def handle_call(:clear, _from, _state) do
     Logger.debug("Clearing all resumes from database and state")
-    BotArmyJobApplications.Repo.delete_all(BotArmyJobApplications.Schemas.Resume)
+    Repo.delete_all(Resume)
     {:reply, :ok, %{}}
   end
 
-  defp schema_to_map(%BotArmyJobApplications.Schemas.Resume{} = resume) do
+  defp schema_to_map(%Resume{} = resume) do
     %{
       "id" => resume.id |> to_string(),
       "tenant_id" => resume.tenant_id |> to_string(),
@@ -378,8 +383,8 @@ defmodule BotArmyJobApplications.ResumeStore do
 
   defp load_roles_with_bullets(resume_id) do
     roles =
-      BotArmyJobApplications.Repo.all(
-        from(r in BotArmyJobApplications.Schemas.ResumeRole,
+      Repo.all(
+        from(r in ResumeRole,
           where: r.resume_id == ^resume_id,
           order_by: [asc: r.sort_order]
         )
@@ -389,8 +394,8 @@ defmodule BotArmyJobApplications.ResumeStore do
       role_id = role.id |> to_string()
 
       bullets =
-        BotArmyJobApplications.Repo.all(
-          from(b in BotArmyJobApplications.Schemas.ResumeBullet,
+        Repo.all(
+          from(b in ResumeBullet,
             where: b.role_id == ^role_id,
             order_by: [asc: b.sort_order]
           )
@@ -421,8 +426,8 @@ defmodule BotArmyJobApplications.ResumeStore do
   end
 
   defp load_skills(resume_id) do
-    BotArmyJobApplications.Repo.all(
-      from(s in BotArmyJobApplications.Schemas.Skill,
+    Repo.all(
+      from(s in Skill,
         where: s.resume_id == ^resume_id
       )
     )
@@ -449,8 +454,8 @@ defmodule BotArmyJobApplications.ResumeStore do
     Enum.with_index(roles)
     |> Enum.each(fn {role, idx} ->
       role_changeset =
-        BotArmyJobApplications.Schemas.ResumeRole.changeset(
-          %BotArmyJobApplications.Schemas.ResumeRole{resume_id: resume_id},
+        ResumeRole.changeset(
+          %ResumeRole{resume_id: resume_id},
           %{
             "tenant_id" => tenant_id,
             "title" => Map.get(role, "title", ""),
@@ -461,15 +466,15 @@ defmodule BotArmyJobApplications.ResumeStore do
           }
         )
 
-      case BotArmyJobApplications.Repo.insert(role_changeset) do
+      case Repo.insert(role_changeset) do
         {:ok, db_role} ->
           bullets = Map.get(role, "bullets", [])
 
           Enum.with_index(bullets)
           |> Enum.each(fn {bullet, bullet_idx} ->
             bullet_changeset =
-              BotArmyJobApplications.Schemas.ResumeBullet.changeset(
-                %BotArmyJobApplications.Schemas.ResumeBullet{role_id: db_role.id},
+              ResumeBullet.changeset(
+                %ResumeBullet{role_id: db_role.id},
                 %{
                   "tenant_id" => tenant_id,
                   "text" => bullet,
@@ -477,14 +482,14 @@ defmodule BotArmyJobApplications.ResumeStore do
                 }
               )
 
-            case BotArmyJobApplications.Repo.insert(bullet_changeset) do
+            case Repo.insert(bullet_changeset) do
               {:ok, _} -> :ok
-              {:error, reason} -> BotArmyJobApplications.Repo.rollback(reason)
+              {:error, reason} -> Repo.rollback(reason)
             end
           end)
 
         {:error, reason} ->
-          BotArmyJobApplications.Repo.rollback(reason)
+          Repo.rollback(reason)
       end
     end)
 
@@ -497,8 +502,8 @@ defmodule BotArmyJobApplications.ResumeStore do
 
     Enum.each(skills, fn skill ->
       skill_changeset =
-        BotArmyJobApplications.Schemas.Skill.changeset(
-          %BotArmyJobApplications.Schemas.Skill{resume_id: resume_id},
+        Skill.changeset(
+          %Skill{resume_id: resume_id},
           %{
             "tenant_id" => tenant_id,
             "name" => Map.get(skill, "name", ""),
@@ -507,9 +512,9 @@ defmodule BotArmyJobApplications.ResumeStore do
           }
         )
 
-      case BotArmyJobApplications.Repo.insert(skill_changeset) do
+      case Repo.insert(skill_changeset) do
         {:ok, _} -> :ok
-        {:error, reason} -> BotArmyJobApplications.Repo.rollback(reason)
+        {:error, reason} -> Repo.rollback(reason)
       end
     end)
 

@@ -1,6 +1,8 @@
-defmodule BotArmyJobApplications.Handlers.ArtifactHandlerTest do
+defmodule ArtifactHandlerTest do
   use ExUnit.Case, async: true
   @moduletag :handlers
+
+  alias ArtifactHandler
 
   describe "handle_request/1" do
     test "validates required fields: application_id" do
@@ -12,7 +14,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandlerTest do
       }
 
       # Handlers return :ok regardless; errors logged
-      result = BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
+      result = ArtifactHandler.handle_request(message)
       assert result == :ok
     end
 
@@ -24,7 +26,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandlerTest do
         }
       }
 
-      result = BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
+      result = ArtifactHandler.handle_request(message)
       assert result == :ok
     end
 
@@ -33,7 +35,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandlerTest do
         "event_id" => "test-event-789"
       }
 
-      result = BotArmyJobApplications.Handlers.ArtifactHandler.handle_request(message)
+      result = ArtifactHandler.handle_request(message)
       assert result == :ok
     end
   end
