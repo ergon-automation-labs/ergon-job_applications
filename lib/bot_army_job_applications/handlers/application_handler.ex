@@ -350,9 +350,8 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   defp validate_transition_payload(_), do: {:error, :invalid_payload}
 
   defp validate_application_payload(payload) when is_map(payload) do
-    with :ok <- require_field(payload, "application_id") do
-      :ok
-    else
+    case require_field(payload, "application_id") do
+      :ok -> :ok
       err -> err
     end
   end

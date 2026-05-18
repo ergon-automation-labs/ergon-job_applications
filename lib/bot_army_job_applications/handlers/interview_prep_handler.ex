@@ -175,12 +175,12 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
     # Top 8 skills
     skills = resume["skills"] || []
     top_skills = Enum.take(skills, 8)
-    skills_text = top_skills |> Enum.map(fn s -> s["name"] end) |> Enum.join(", ")
+    skills_text = Enum.map_join(top_skills, ", ", fn s -> s["name"] end)
 
     # Top 10 bullets from most recent roles
     roles = resume["roles"] || []
     bullets = Enum.flat_map(roles, fn role -> role["bullets"] || [] end)
-    top_bullets = Enum.take(bullets, 10) |> Enum.map(fn b -> "- #{b}" end) |> Enum.join("\n")
+    top_bullets = Enum.take(bullets, 10) |> Enum.map_join("\n", fn b -> "- #{b}" end)
 
     jd_tags_text = Enum.join(jd_tags, ", ")
 

@@ -20,7 +20,11 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
   }
 
   defp application_store do
-    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :application_store,
+      BotArmyJobApplications.ApplicationStore
+    )
   end
 
   @doc """
@@ -60,9 +64,8 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
   # Private helpers
 
   defp validate_payload(payload) when is_map(payload) do
-    with :ok <- require_field(payload, "match_type") do
-      :ok
-    else
+    case require_field(payload, "match_type") do
+      :ok -> :ok
       err -> err
     end
   end
@@ -101,7 +104,10 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
             {:ok, {:signal_detected, signal}}
 
           {:error, reason} ->
-            Logger.error("Failed to store pending signal for #{application_id}: #{inspect(reason)}")
+            Logger.error(
+              "Failed to store pending signal for #{application_id}: #{inspect(reason)}"
+            )
+
             {:error, reason}
         end
 
@@ -141,8 +147,8 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
     from = match_text["from"]
 
     # Check if company name appears in subject line
+    # Or if company name appears in email domain
     String.contains?(subject, company) or
-      # Or if company name appears in email domain
       contains_company_in_domain(from, company)
   end
 

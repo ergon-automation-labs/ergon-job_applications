@@ -215,7 +215,7 @@ defmodule BotArmyJobApplications.RankingTest do
 
       top_0 = Ranking.top_n(apps, 0)
 
-      assert length(top_0) == 0
+      assert top_0 == []
     end
   end
 
@@ -245,9 +245,9 @@ defmodule BotArmyJobApplications.RankingTest do
       {high, _medium, low} = Ranking.by_tier(apps)
 
       # At least one in high tier
-      assert length(high) > 0
+      assert high != []
       # At least one in low tier
-      assert length(low) > 0
+      assert low != []
       # All high tier scores >= 0.75
       Enum.each(high, fn {_, score} ->
         assert score >= 0.75
