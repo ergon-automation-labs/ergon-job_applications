@@ -79,7 +79,7 @@ defmodule BotArmyJobApplications.ResumeComposerTest do
 
       # Should have roles with scored bullets
       [role | _] = result["roles"]
-      assert length(role["bullets"]) >= 0
+      assert is_list(role["bullets"])
     end
 
     test "filters skills by tag overlap", %{resume: resume} do

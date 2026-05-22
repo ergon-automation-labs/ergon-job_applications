@@ -111,7 +111,7 @@ defmodule DigestHandlerTest do
     test "identifies stalled applications (7+ days old)" do
       now = DateTime.utc_now()
       # 10 days ago
-      stale_time = DateTime.add(now, -(10 * 86400), :second)
+      stale_time = DateTime.add(now, -(10 * 86_400), :second)
 
       apps = [
         %{
@@ -142,7 +142,7 @@ defmodule DigestHandlerTest do
       # Use 12 hours ago (definitely within 24h window)
       recent_time = DateTime.add(now, -(12 * 3600), :second)
       # Use 3 days ago (definitely outside 24h window)
-      old_time = DateTime.add(now, -(3 * 86400), :second)
+      old_time = DateTime.add(now, -(3 * 86_400), :second)
 
       apps = [
         %{

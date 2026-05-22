@@ -126,7 +126,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
   end
 
   defp recent_activity(applications, now) do
-    one_day_ago = DateTime.add(now, -86400, :second)
+    one_day_ago = DateTime.add(now, -86_400, :second)
 
     applications
     |> Enum.flat_map(fn app ->
@@ -152,7 +152,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
   end
 
   defp stalled(applications, now) do
-    stale_threshold = DateTime.add(now, -(@stale_days * 86400), :second)
+    stale_threshold = DateTime.add(now, -(@stale_days * 86_400), :second)
 
     applications
     |> Enum.filter(fn app ->
@@ -177,7 +177,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
     case parse_iso8601(updated_at_iso) do
       {:ok, updated_at} ->
         diff_seconds = DateTime.diff(now, updated_at, :second)
-        div(diff_seconds, 86400)
+        div(diff_seconds, 86_400)
 
       :error ->
         0

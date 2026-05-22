@@ -35,7 +35,7 @@ defmodule EmailSignalHandlerTest do
         signal = payload["pending_signal"]
         assert signal["type"] == "interview_invite"
         assert signal["proposed_transition"] == "phone_screen"
-        assert signal["email_id"] == 12345
+        assert signal["email_id"] == 12_345
         assert signal["from_address"] == "recruiter@anthropic.com"
         assert signal["subject_line"] == "Interview with Anthropic Engineering Team"
         assert signal["confidence"] == 0.95
@@ -52,7 +52,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "interview_request",
           "confidence" => 0.95,
-          "message_id" => 12345,
+          "message_id" => 12_345,
           "from" => "recruiter@anthropic.com",
           "subject" => "Interview with Anthropic Engineering Team"
         }
@@ -84,7 +84,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "phone_screen",
           "confidence" => 0.92,
-          "message_id" => 12346,
+          "message_id" => 12_346,
           "from" => "recruiter@anthropic.com",
           "subject" => "Phone screen with Anthropic"
         }
@@ -117,7 +117,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "offer",
           "confidence" => 0.99,
-          "message_id" => 12347,
+          "message_id" => 12_347,
           "from" => "recruiter@anthropic.com",
           "subject" => "Offer for Anthropic"
         }
@@ -150,7 +150,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "rejection",
           "confidence" => 0.88,
-          "message_id" => 12348,
+          "message_id" => 12_348,
           "from" => "recruiter@anthropic.com",
           "subject" => "Rejection from Anthropic"
         }
@@ -184,7 +184,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "interview_request",
           "confidence" => 0.95,
-          "message_id" => 12345,
+          "message_id" => 12_345,
           "from" => "recruiter@anthropic.com",
           "subject" => "Interview with Anthropic Engineering Team"
         }
@@ -203,7 +203,7 @@ defmodule EmailSignalHandlerTest do
         "user_id" => nil,
         "payload" => %{
           "confidence" => 0.95,
-          "message_id" => 12345,
+          "message_id" => 12_345,
           "from" => "recruiter@anthropic.com",
           "subject" => "Interview"
         }
@@ -247,7 +247,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "interview_request",
           "confidence" => 0.87,
-          "message_id" => 12345,
+          "message_id" => 12_345,
           "from" => "recruiter@anthropic.com",
           "subject" => "Interview with Anthropic"
         }
@@ -277,7 +277,7 @@ defmodule EmailSignalHandlerTest do
         "payload" => %{
           "match_type" => "interview_request",
           "confidence" => 0.95,
-          "message_id" => 12345,
+          "message_id" => 12_345,
           "from" => "recruiter@anthropic.com",
           "subject" => "Interview next week"
         }
