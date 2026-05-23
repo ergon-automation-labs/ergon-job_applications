@@ -21,7 +21,10 @@
 
           # Cyclomatic complexity threshold of 9 is too strict for complex
           # business logic with multiple validation branches and conditions.
-          {Credo.Check.Refactor.CyclomaticComplexity, []}
+          {Credo.Check.Refactor.CyclomaticComplexity, []},
+
+          # Predicate naming: is_ prefix vs ? suffix is a style choice.
+          {Credo.Check.Readability.PredicateFunctionNames, []}
         ]
       }
     }
