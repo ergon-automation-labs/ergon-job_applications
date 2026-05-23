@@ -24,7 +24,17 @@
           {Credo.Check.Refactor.CyclomaticComplexity, []},
 
           # Predicate naming: is_ prefix vs ? suffix is a style choice.
-          {Credo.Check.Readability.PredicateFunctionNames, []}
+          {Credo.Check.Readability.PredicateFunctionNames, []},
+
+          # Enum.map_join vs map+join: both are acceptable patterns.
+          {Credo.Check.Refactor.MapJoin, []},
+
+          # Negated conditions: sometimes more readable than alternatives.
+          {Credo.Check.Refactor.NegatedConditionsInUnless, []},
+          {Credo.Check.Refactor.NegatedConditionsWithElse, []},
+
+          # Variable naming pattern is a style preference.
+          {Credo.Check.Consistency.ParameterPatternMatching, []}
         ]
       }
     }
