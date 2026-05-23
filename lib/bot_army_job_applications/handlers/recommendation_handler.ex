@@ -148,39 +148,49 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
 
     case RecommendationScorer.parse_llm_score_response(payload["completion"] || "") do
       {:ok, score, reason} ->
-        Logger.info(
-          "LLM scored listing #{listing_id} (resume: #{resume_id}): #{(score * 100) |> trunc()}%"
+        process_llm_score(
+          tenant_id,
+          listing_id,
+          resume_id,
+          score,
+          reason,
+          user_id
         )
-
-        # Update listing with score + reason
-        case listing_store().update(tenant_id, listing_id, %{
-               "recommendation_score" => score,
-               "recommendation_reason" => reason,
-               "scored_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
-             }) do
-          {:ok, listing} ->
-            Logger.info(
-              "Updated listing #{listing_id} with recommendation score: #{(score * 100) |> trunc()}%"
-            )
-
-            # If score >= 0.80 and not yet pushed to GTD, push it (if GTD integration enabled)
-            if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
-              if score >= 0.80 and not (listing["gtd_pushed"] || false) do
-                publish_gtd_inbox_item(listing, score, reason, resume_id, tenant_id, user_id)
-                # Mark as pushed
-                listing_store().update(tenant_id, listing_id, %{"gtd_pushed" => true})
-              end
-            end
-
-            # Publish event
-            publish_recommendation_scored(listing, score, reason, tenant_id, user_id)
-
-          {:error, reason} ->
-            Logger.error("Failed to update listing #{listing_id}: #{inspect(reason)}")
-        end
 
       {:error, reason} ->
         Logger.warning("Failed to parse LLM score response: #{inspect(reason)}")
+    end
+  end
+
+  defp process_llm_score(tenant_id, listing_id, resume_id, score, reason, user_id) do
+    Logger.info(
+      "LLM scored listing #{listing_id} (resume: #{resume_id}): #{(score * 100) |> trunc()}%"
+    )
+
+    case listing_store().update(tenant_id, listing_id, %{
+           "recommendation_score" => score,
+           "recommendation_reason" => reason,
+           "scored_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+         }) do
+      {:ok, listing} ->
+        Logger.info(
+          "Updated listing #{listing_id} with recommendation score: #{(score * 100) |> trunc()}%"
+        )
+
+        maybe_push_to_gtd(tenant_id, listing_id, listing, score, reason, resume_id, user_id)
+        publish_recommendation_scored(listing, score, reason, tenant_id, user_id)
+
+      {:error, reason} ->
+        Logger.error("Failed to update listing #{listing_id}: #{inspect(reason)}")
+    end
+  end
+
+  defp maybe_push_to_gtd(tenant_id, listing_id, listing, score, reason, resume_id, user_id) do
+    if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
+      if score >= 0.80 and not (listing["gtd_pushed"] || false) do
+        publish_gtd_inbox_item(listing, score, reason, resume_id, tenant_id, user_id)
+        listing_store().update(tenant_id, listing_id, %{"gtd_pushed" => true})
+      end
     end
   end
 
