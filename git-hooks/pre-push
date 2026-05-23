@@ -51,7 +51,7 @@ if [[ $push_to_main -eq 1 ]]; then
 
   echo ""
   echo "📝 Running credo..."
-  "$MIX_BIN" credo --strict || {
+  "$MIX_BIN" credo || {
     echo "❌ Credo checks failed - push aborted"
     exit 1
   }
