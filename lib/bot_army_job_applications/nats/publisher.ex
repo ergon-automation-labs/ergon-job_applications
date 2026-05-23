@@ -85,7 +85,12 @@ defmodule BotArmyJobApplications.NATS.Publisher do
   """
   def publish_llm_request_with_metadata(payload, source_domain, application_id, extra_metadata) do
     source_meta = %{"source_domain" => source_domain}
-    source_meta = if application_id, do: Map.put(source_meta, "application_id", application_id), else: source_meta
+
+    source_meta =
+      if application_id,
+        do: Map.put(source_meta, "application_id", application_id),
+        else: source_meta
+
     source_meta = Map.merge(source_meta, extra_metadata)
 
     request = %{
