@@ -13,8 +13,9 @@ defmodule BotArmyJobApplications.ResumeStore do
 
   alias BotArmyJobApplications.Repo
   alias BotArmyJobApplications.Schemas.Resume
-  alias ResumeRole
-  alias Skill
+  alias BotArmyJobApplications.Schemas.ResumeBullet
+  alias BotArmyJobApplications.Schemas.ResumeRole
+  alias BotArmyJobApplications.Schemas.Skill
 
   @server __MODULE__
 
