@@ -4,7 +4,7 @@ defmodule DigestHandlerTest do
 
   import Mox
 
-  alias DigestHandler
+  alias BotArmyJobApplications.Handlers.DigestHandler
 
   setup :verify_on_exit!
 

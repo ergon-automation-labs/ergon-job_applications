@@ -2,7 +2,7 @@ defmodule ArtifactHandlerTest do
   use ExUnit.Case, async: true
   @moduletag :handlers
 
-  alias ArtifactHandler
+  alias BotArmyJobApplications.Handlers.ArtifactHandler
 
   describe "handle_request/1" do
     test "validates required fields: application_id" do

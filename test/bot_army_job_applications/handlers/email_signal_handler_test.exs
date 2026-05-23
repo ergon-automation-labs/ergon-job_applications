@@ -3,7 +3,7 @@ defmodule EmailSignalHandlerTest do
   @moduletag :handlers
   import Mox
 
-  alias EmailSignalHandler
+  alias BotArmyJobApplications.Handlers.EmailSignalHandler
 
   setup :verify_on_exit!
 
