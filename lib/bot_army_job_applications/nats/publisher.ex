@@ -24,28 +24,26 @@ defmodule BotArmyJobApplications.NATS.Publisher do
   Returns :ok if successful, or {:error, reason} on failure.
   """
   def publish(event) when is_map(event) do
-    try do
-      subject = derive_subject(event["event"])
-      body = Jason.encode!(event)
+    subject = derive_subject(event["event"])
+    body = Jason.encode!(event)
 
-      case do_publish(subject, body) do
-        {:ok, _subject} ->
-          Logger.debug("Published event to #{subject}")
-          :ok
+    case do_publish(subject, body) do
+      {:ok, _subject} ->
+        Logger.debug("Published event to #{subject}")
+        :ok
 
-        :ok ->
-          Logger.debug("Published event to #{subject}")
-          :ok
+      :ok ->
+        Logger.debug("Published event to #{subject}")
+        :ok
 
-        {:error, reason} ->
-          Logger.error("Failed to publish to #{subject}: #{inspect(reason)}")
-          {:error, reason}
-      end
-    rescue
-      e ->
-        Logger.error("Exception during publish: #{inspect(e)}")
-        {:error, e}
+      {:error, reason} ->
+        Logger.error("Failed to publish to #{subject}: #{inspect(reason)}")
+        {:error, reason}
     end
+  rescue
+    e ->
+      Logger.error("Exception during publish: #{inspect(e)}")
+      {:error, e}
   end
 
   def publish(_) do

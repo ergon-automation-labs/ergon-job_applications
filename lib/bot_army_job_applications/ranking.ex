@@ -204,20 +204,16 @@ defmodule BotArmyJobApplications.Ranking do
   # Specific tech stacks = higher score (more targeted role)
   defp score_specificity(tags) do
     tech_count =
-      tags
-      |> Map.get("technologies", [])
-      |> (fn
-            list when is_list(list) -> length(list)
-            _ -> 0
-          end).()
+      case Map.get(tags, "technologies", []) do
+        list when is_list(list) -> length(list)
+        _ -> 0
+      end
 
     frameworks =
-      tags
-      |> Map.get("frameworks", [])
-      |> (fn
-            list when is_list(list) -> length(list)
-            _ -> 0
-          end).()
+      case Map.get(tags, "frameworks", []) do
+        list when is_list(list) -> length(list)
+        _ -> 0
+      end
 
     total_specificity = tech_count + frameworks
 

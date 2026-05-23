@@ -10,7 +10,8 @@ defmodule BotArmyJobApplications.TextExtractor do
   Supports: .md, .txt, .pdf, .docx, .doc
   Returns {:ok, text} or {:error, reason}
   """
-  def extract(file_path, original_filename) when is_binary(file_path) and is_binary(original_filename) do
+  def extract(file_path, original_filename)
+      when is_binary(file_path) and is_binary(original_filename) do
     extension = Path.extname(original_filename) |> String.downcase()
 
     case extension do
@@ -35,18 +36,18 @@ defmodule BotArmyJobApplications.TextExtractor do
 
   # Extract from PDF using pdftotext command
   defp extract_pdf(file_path) do
-    try do
-      case System.cmd("pdftotext", [file_path, "-"]) do
-        {text, 0} -> {:ok, text}
-        {_output, code} ->
-          Logger.error("pdftotext failed with exit code #{code}")
-          {:error, {:pdf_extraction_failed, code}}
-      end
-    rescue
-      e ->
-        Logger.error("pdftotext not available: #{inspect(e)}")
-        {:error, {:pdftotext_not_available, e}}
+    case System.cmd("pdftotext", [file_path, "-"]) do
+      {text, 0} ->
+        {:ok, text}
+
+      {_output, code} ->
+        Logger.error("pdftotext failed with exit code #{code}")
+        {:error, {:pdf_extraction_failed, code}}
     end
+  rescue
+    e ->
+      Logger.error("pdftotext not available: #{inspect(e)}")
+      {:error, {:pdftotext_not_available, e}}
   end
 
   # Extract from DOCX (Office Open XML)
@@ -80,8 +81,8 @@ defmodule BotArmyJobApplications.TextExtractor do
   # Find the document.xml file in the Office package
   defp find_document_xml(files) do
     case Enum.find(files, fn {name, _content} ->
-      String.contains?(to_string(name), "word/document.xml")
-    end) do
+           String.contains?(to_string(name), "word/document.xml")
+         end) do
       {_name, content} -> {:ok, content}
       nil -> {:error, :document_xml_not_found}
     end

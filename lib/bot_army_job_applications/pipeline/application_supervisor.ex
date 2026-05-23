@@ -26,31 +26,37 @@ defmodule BotArmyJobApplications.ApplicationSupervisor do
   end
 
   defp load_applications_with_retries(retries_left) do
-    try do
-      terminal_states = BotArmyJobApplications.Commands.all_states()
+    terminal_states =
+      BotArmyJobApplications.Commands.all_states()
       |> Enum.filter(&BotArmyJobApplications.Commands.terminal?/1)
 
-      applications = BotArmyJobApplications.Repo.all(
-        from app in BotArmyJobApplications.Schemas.Application,
-        where: app.state not in ^terminal_states
+    applications =
+      BotArmyJobApplications.Repo.all(
+        from(app in BotArmyJobApplications.Schemas.Application,
+          where: app.state not in ^terminal_states
+        )
       )
 
-      # Start one ApplicationServer per non-terminal application
-      Enum.each(applications, fn app ->
-        start_child(app.id)
-      end)
+    # Start one ApplicationServer per non-terminal application
+    Enum.each(applications, fn app ->
+      start_child(app.id)
+    end)
 
-      Logger.info("Started #{length(applications)} ApplicationServers from database")
-    rescue
-      e ->
-        if retries_left > 0 do
-          Logger.debug("Database not ready, retrying in 500ms (#{retries_left} retries left): #{inspect(e)}")
-          Process.sleep(500)
-          load_applications_with_retries(retries_left - 1)
-        else
-          Logger.warning("Error loading applications from database on supervisor init: #{inspect(e)}")
-        end
-    end
+    Logger.info("Started #{length(applications)} ApplicationServers from database")
+  rescue
+    e ->
+      if retries_left > 0 do
+        Logger.debug(
+          "Database not ready, retrying in 500ms (#{retries_left} retries left): #{inspect(e)}"
+        )
+
+        Process.sleep(500)
+        load_applications_with_retries(retries_left - 1)
+      else
+        Logger.warning(
+          "Error loading applications from database on supervisor init: #{inspect(e)}"
+        )
+      end
   end
 
   @doc """

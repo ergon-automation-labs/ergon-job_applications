@@ -109,11 +109,9 @@ defmodule BotArmyJobApplications.PulsePublisher do
 
   # API for other modules
   def record_listing(match_score, industry) when is_float(match_score) and is_binary(industry) do
-    try do
-      GenServer.call(@server, {:record_listing, match_score, industry})
-    catch
-      :exit, _ -> :ok
-    end
+    GenServer.call(@server, {:record_listing, match_score, industry})
+  catch
+    :exit, _ -> :ok
   end
 
   # Private
@@ -150,25 +148,23 @@ defmodule BotArmyJobApplications.PulsePublisher do
   end
 
   defp publish_to_nats(pulse) do
-    try do
-      case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
-        {:ok, conn} ->
-          json = Jason.encode!(pulse)
+    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+      {:ok, conn} ->
+        json = Jason.encode!(pulse)
 
-          case Gnat.pub(conn, "bot.job_applications.pulse", json) do
-            :ok ->
-              Logger.debug("[PulsePublisher] Published Job Applications pulse")
+        case Gnat.pub(conn, "bot.job_applications.pulse", json) do
+          :ok ->
+            Logger.debug("[PulsePublisher] Published Job Applications pulse")
 
-            {:error, reason} ->
-              Logger.warning("[PulsePublisher] Failed to publish pulse: #{inspect(reason)}")
-          end
+          {:error, reason} ->
+            Logger.warning("[PulsePublisher] Failed to publish pulse: #{inspect(reason)}")
+        end
 
-        {:error, reason} ->
-          Logger.warning("[PulsePublisher] NATS unavailable, skipping pulse: #{inspect(reason)}")
-      end
-    rescue
-      e ->
-        Logger.warning("[PulsePublisher] Error publishing pulse: #{inspect(e)}")
+      {:error, reason} ->
+        Logger.warning("[PulsePublisher] NATS unavailable, skipping pulse: #{inspect(reason)}")
     end
+  rescue
+    e ->
+      Logger.warning("[PulsePublisher] Error publishing pulse: #{inspect(e)}")
   end
 end

@@ -80,20 +80,18 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
   defp validate_rank_payload(_), do: {:error, "payload must be a map"}
 
   defp rank_applications(limit, tier_filter, tenant_id) do
-    try do
-      applications = ApplicationStore.list(tenant_id)
-      total = length(applications)
-      ranked = Ranking.rank(applications)
+    applications = ApplicationStore.list(tenant_id)
+    total = length(applications)
+    ranked = Ranking.rank(applications)
 
-      filtered = apply_tier_filter(ranked, tier_filter)
-      result = apply_limit(filtered, limit)
-      response_apps = format_response(result)
+    filtered = apply_tier_filter(ranked, tier_filter)
+    result = apply_limit(filtered, limit)
+    response_apps = format_response(result)
 
-      {:ok, response_apps, total}
-    rescue
-      reason ->
-        {:error, reason}
-    end
+    {:ok, response_apps, total}
+  rescue
+    reason ->
+      {:error, reason}
   end
 
   defp apply_tier_filter(ranked, "high") do
