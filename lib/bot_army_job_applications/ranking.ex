@@ -132,41 +132,37 @@ defmodule BotArmyJobApplications.Ranking do
   # Salary alignment: is compensation acceptable?
   defp score_salary(application) do
     case Map.get(application, "salary_range") do
-      nil ->
-        0.5
-
-      range when is_map(range) ->
-        min_salary = Map.get(range, "min")
-        max_salary = Map.get(range, "max")
-
-        case {min_salary, max_salary} do
-          {nil, nil} ->
-            0.5
-
-          {min, nil} when is_number(min) ->
-            if min >= 100_000, do: 1.0, else: 0.7
-
-          {nil, max} when is_number(max) ->
-            if max >= 150_000, do: 1.0, else: 0.6
-
-          {min, max} when is_number(min) and is_number(max) ->
-            # Both bounds available
-            cond do
-              min >= 150_000 and max >= 200_000 -> 1.0
-              min >= 120_000 and max >= 150_000 -> 0.9
-              min >= 100_000 and max >= 120_000 -> 0.7
-              min >= 80_000 and max >= 100_000 -> 0.5
-              true -> 0.3
-            end
-
-          _ ->
-            0.5
-        end
-
-      _ ->
-        0.5
+      nil -> 0.5
+      range when is_map(range) -> score_salary_range(range)
+      _ -> 0.5
     end
   end
+
+  defp score_salary_range(range) do
+    min_salary = Map.get(range, "min")
+    max_salary = Map.get(range, "max")
+    score_salary_bounds(min_salary, max_salary)
+  end
+
+  defp score_salary_bounds(nil, nil), do: 0.5
+
+  defp score_salary_bounds(min, nil) when is_number(min),
+    do: if(min >= 100_000, do: 1.0, else: 0.7)
+
+  defp score_salary_bounds(nil, max) when is_number(max),
+    do: if(max >= 150_000, do: 1.0, else: 0.6)
+
+  defp score_salary_bounds(min, max) when is_number(min) and is_number(max) do
+    cond do
+      min >= 150_000 and max >= 200_000 -> 1.0
+      min >= 120_000 and max >= 150_000 -> 0.9
+      min >= 100_000 and max >= 120_000 -> 0.7
+      min >= 80_000 and max >= 100_000 -> 0.5
+      true -> 0.3
+    end
+  end
+
+  defp score_salary_bounds(_, _), do: 0.5
 
   # Role seniority match: does the role fit experience level?
   defp score_role(application) do
@@ -207,19 +203,21 @@ defmodule BotArmyJobApplications.Ranking do
 
   # Specific tech stacks = higher score (more targeted role)
   defp score_specificity(tags) do
-    tech_count = tags
-    |> Map.get("technologies", [])
-    |> (fn
-      list when is_list(list) -> length(list)
-      _ -> 0
-    end).()
+    tech_count =
+      tags
+      |> Map.get("technologies", [])
+      |> (fn
+            list when is_list(list) -> length(list)
+            _ -> 0
+          end).()
 
-    frameworks = tags
-    |> Map.get("frameworks", [])
-    |> (fn
-      list when is_list(list) -> length(list)
-      _ -> 0
-    end).()
+    frameworks =
+      tags
+      |> Map.get("frameworks", [])
+      |> (fn
+            list when is_list(list) -> length(list)
+            _ -> 0
+          end).()
 
     total_specificity = tech_count + frameworks
 
