@@ -25,6 +25,7 @@ defmodule BotArmyJobApplications.Application do
       |> maybe_add_ingestion_worker()
       |> maybe_add_digest_scheduler()
       |> maybe_add_pulse_publisher()
+      |> maybe_add_outcome_tracker()
       |> maybe_add_consumer()
       |> maybe_add_health_responder()
 
@@ -101,12 +102,20 @@ defmodule BotArmyJobApplications.Application do
     end
   end
 
+  defp maybe_add_outcome_tracker(children) do
+    if @env == :test do
+      children
+    else
+      [{BotArmyLearning.OutcomeTracker, [repo: BotArmyJobApplications.Repo]} | children]
+    end
+  end
+
   defp maybe_add_health_responder(children) do
     if @env == :test,
       do: children,
       else: [
         {BotArmyRuntime.Health.Responder,
-         [bot_name: :job_applications, repo: BotArmyJobApplications.Repo, version: "0.2.31"]}
+         [bot_name: :job_applications, repo: BotArmyJobApplications.Repo, version: "0.2.55"]}
         | children
       ]
   end
