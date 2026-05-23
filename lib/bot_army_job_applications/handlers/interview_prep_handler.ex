@@ -78,41 +78,49 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
 
     case application_store().get(tenant_id, application_id) do
       {:ok, application} ->
-        # Store prep in artifacts
-        existing_artifacts = application["artifacts"] || %{}
-
-        updated_artifacts =
-          Map.merge(existing_artifacts, %{
-            "interview_prep_md" => prep_text,
-            "interview_prep_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
-          })
-
-        case application_store().update(tenant_id, application_id, %{
-               "artifacts" => updated_artifacts
-             }) do
-          {:ok, updated_application} ->
-            Logger.info(
-              "Interview prep generated and stored for application #{application_id} (#{updated_application["company"]} — #{updated_application["role_title"]})"
-            )
-
-            # Publish result event
-            publish_interview_prep_result(updated_application, prep_text, tenant_id, user_id)
-
-            # Push to GTD inbox
-            if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
-              publish_gtd_prep_task(updated_application, tenant_id, user_id)
-            end
-
-          {:error, reason} ->
-            Logger.error(
-              "Failed to store interview prep for #{application_id}: #{inspect(reason)}"
-            )
-        end
+        store_and_publish_prep(
+          tenant_id,
+          application_id,
+          application,
+          prep_text,
+          user_id
+        )
 
       {:error, reason} ->
         Logger.error(
           "Failed to fetch application #{application_id} for prep storage: #{inspect(reason)}"
         )
+    end
+  end
+
+  defp store_and_publish_prep(tenant_id, application_id, application, prep_text, user_id) do
+    existing_artifacts = application["artifacts"] || %{}
+
+    updated_artifacts =
+      Map.merge(existing_artifacts, %{
+        "interview_prep_md" => prep_text,
+        "interview_prep_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+      })
+
+    case application_store().update(tenant_id, application_id, %{
+           "artifacts" => updated_artifacts
+         }) do
+      {:ok, updated_application} ->
+        Logger.info(
+          "Interview prep generated and stored for application #{application_id} (#{updated_application["company"]} — #{updated_application["role_title"]})"
+        )
+
+        publish_interview_prep_result(updated_application, prep_text, tenant_id, user_id)
+        maybe_publish_gtd_prep_task(updated_application, tenant_id, user_id)
+
+      {:error, reason} ->
+        Logger.error("Failed to store interview prep for #{application_id}: #{inspect(reason)}")
+    end
+  end
+
+  defp maybe_publish_gtd_prep_task(application, tenant_id, user_id) do
+    if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
+      publish_gtd_prep_task(application, tenant_id, user_id)
     end
   end
 

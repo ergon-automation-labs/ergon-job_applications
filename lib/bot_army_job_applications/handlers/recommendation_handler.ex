@@ -39,86 +39,96 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
-    resume_id = Map.get(payload, "resume_id")
-    limit = Map.get(payload, "limit", 20)
-
     case validate_recommend_payload(payload) do
       :ok ->
-        case get_default_resume(tenant_id, resume_id) do
-          {:ok, resume} ->
-            case listing_store().list(tenant_id, []) do
-              {:ok, listings} ->
-                # Synchronous: tag overlap scoring
-                Logger.info(
-                  "handle_recommend: Resume has #{length(resume["skills"] || [])} skills and #{length(resume["roles"] || [])} roles"
-                )
-
-                Logger.debug("Resume skills: #{inspect(resume["skills"])}")
-                Logger.debug("Sample listing: #{inspect(List.first(listings))}")
-
-                scored_pairs = RecommendationScorer.shortlist(listings, resume, limit)
-
-                recommendations =
-                  Enum.map(scored_pairs, fn {listing, score} ->
-                    role_title = listing["role_title"]
-                    jd_text = listing["jd_text"]
-                    required_skills = extract_required_skills(jd_text)
-
-                    # Merge extracted fields into listing
-                    enriched_listing =
-                      Map.merge(listing, %{
-                        "seniority_level" => extract_seniority(role_title),
-                        "role_type" => extract_role_type(role_title),
-                        "salary_range" => listing["salary_range"] || extract_salary(jd_text),
-                        "location" => listing["location"] || extract_location(jd_text),
-                        "required_skills" => required_skills
-                      })
-
-                    # Check if matches target profile and apply score boost
-                    target_match = matches_target_profile?(enriched_listing, resume)
-                    boosted_score = if target_match, do: score * 1.25, else: score
-
-                    %{
-                      "listing" => enriched_listing,
-                      "score" => (boosted_score * 100) |> Float.round(0) |> trunc(),
-                      "reason" => "Tag match",
-                      "target_match" => target_match
-                    }
-                  end)
-
-                # Reply immediately with tag-scored results
-                reply_body =
-                  Jason.encode!(%{
-                    "ok" => true,
-                    "recommendations" => recommendations,
-                    "total_scored" => length(recommendations)
-                  })
-
-                if conn do
-                  Gnat.pub(conn, reply_to, reply_body)
-                end
-
-                Logger.info(
-                  "Sent recommendations: #{length(recommendations)} scored (tag overlap), LLM enrichment in background"
-                )
-
-                # Asynchronously: fire LLM requests for each shortlist item
-                fire_async_llm_requests(scored_pairs, resume)
-
-              {:error, reason} ->
-                Logger.error("Failed to fetch listings: #{inspect(reason)}")
-                reply_error(conn, reply_to, "Failed to fetch listings")
-            end
-
-          {:error, reason} ->
-            Logger.error("Failed to fetch resume: #{inspect(reason)}")
-            reply_error(conn, reply_to, "Resume not found")
-        end
+        process_recommendation_request(tenant_id, payload, reply_to, conn)
 
       {:error, reason} ->
         Logger.warning("Invalid recommend request: #{inspect(reason)}")
         reply_error(conn, reply_to, "Invalid request")
     end
+  end
+
+  defp process_recommendation_request(tenant_id, payload, reply_to, conn) do
+    resume_id = Map.get(payload, "resume_id")
+    limit = Map.get(payload, "limit", 20)
+
+    case get_default_resume(tenant_id, resume_id) do
+      {:ok, resume} ->
+        fetch_and_score_listings(tenant_id, resume, limit, reply_to, conn)
+
+      {:error, reason} ->
+        Logger.error("Failed to fetch resume: #{inspect(reason)}")
+        reply_error(conn, reply_to, "Resume not found")
+    end
+  end
+
+  defp fetch_and_score_listings(tenant_id, resume, limit, reply_to, conn) do
+    case listing_store().list(tenant_id, []) do
+      {:ok, listings} ->
+        score_and_reply_listings(listings, resume, limit, reply_to, conn)
+
+      {:error, reason} ->
+        Logger.error("Failed to fetch listings: #{inspect(reason)}")
+        reply_error(conn, reply_to, "Failed to fetch listings")
+    end
+  end
+
+  defp score_and_reply_listings(listings, resume, limit, reply_to, conn) do
+    Logger.info(
+      "handle_recommend: Resume has #{length(resume["skills"] || [])} skills and #{length(resume["roles"] || [])} roles"
+    )
+
+    scored_pairs = RecommendationScorer.shortlist(listings, resume, limit)
+    recommendations = build_recommendations(scored_pairs, resume)
+
+    reply_body =
+      Jason.encode!(%{
+        "ok" => true,
+        "recommendations" => recommendations,
+        "total_scored" => length(recommendations)
+      })
+
+    if conn do
+      Gnat.pub(conn, reply_to, reply_body)
+    end
+
+    Logger.info(
+      "Sent recommendations: #{length(recommendations)} scored (tag overlap), LLM enrichment in background"
+    )
+
+    fire_async_llm_requests(scored_pairs, resume)
+  end
+
+  defp build_recommendations(scored_pairs, resume) do
+    Enum.map(scored_pairs, fn {listing, score} ->
+      enrich_and_score_listing(listing, score, resume)
+    end)
+  end
+
+  defp enrich_and_score_listing(listing, score, resume) do
+    role_title = listing["role_title"]
+    jd_text = listing["jd_text"]
+    required_skills = extract_required_skills(jd_text)
+
+    enriched_listing =
+      Map.merge(listing, %{
+        "seniority_level" => extract_seniority(role_title),
+        "role_type" => extract_role_type(role_title),
+        "salary_range" => listing["salary_range"] || extract_salary(jd_text),
+        "location" => listing["location"] || extract_location(jd_text),
+        "required_skills" => required_skills
+      })
+
+    target_match = matches_target_profile?(enriched_listing, resume)
+    boosted_score = if target_match, do: score * 1.25, else: score
+
+    %{
+      "listing" => enriched_listing,
+      "score" => (boosted_score * 100) |> Float.round(0) |> trunc(),
+      "reason" => "Tag match",
+      "target_match" => target_match
+    }
   end
 
   def handle_recommend(_, _, _), do: :ok

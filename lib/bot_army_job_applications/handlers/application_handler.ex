@@ -99,86 +99,66 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
 
     case validate_application_payload(payload) do
       :ok ->
-        application_id = payload["application_id"]
-
-        case application_store().get(tenant_id, application_id) do
-          {:ok, application} ->
-            pending_signal = application["pending_signal"]
-
-            if pending_signal do
-              to_state = pending_signal["proposed_transition"]
-
-              metadata = %{
-                "triggered_by" => "email_signal_confirmed",
-                "signal_type" => pending_signal["type"]
-              }
-
-              # Transition to the proposed state
-              case ApplicationServer.transition(
-                     application_id,
-                     to_state,
-                     metadata
-                   ) do
-                {:ok, _updated_app} ->
-                  # Clear the pending signal
-                  case application_store().update(tenant_id, application_id, %{
-                         "pending_signal" => nil
-                       }) do
-                    {:ok, updated_app} ->
-                      Logger.info(
-                        "Confirmed email signal for application: #{application_id}, transitioned to #{to_state}"
-                      )
-
-                      publish_signal_cleared(updated_app, event_id)
-
-                    {:error, reason} ->
-                      Logger.error(
-                        "Failed to clear pending signal for #{application_id}: #{inspect(reason)}"
-                      )
-                  end
-
-                {:error, reason} ->
-                  Logger.error(
-                    "Failed to transition application #{application_id}: #{inspect(reason)}"
-                  )
-
-                  Publisher.publish_error(
-                    event_id,
-                    reason,
-                    "Failed to confirm signal"
-                  )
-              end
-            else
-              Logger.warning("No pending signal found for application: #{application_id}")
-            end
-
-          {:error, :not_found} ->
-            Logger.error("Application not found: #{application_id}")
-
-            Publisher.publish_error(
-              event_id,
-              :not_found,
-              "Application not found"
-            )
-
-          {:error, reason} ->
-            Logger.error("Failed to get application #{application_id}: #{inspect(reason)}")
-
-            Publisher.publish_error(
-              event_id,
-              reason,
-              "Failed to confirm signal"
-            )
-        end
+        confirm_signal_for_application(tenant_id, payload, event_id)
 
       {:error, reason} ->
         Logger.warning("Invalid confirm signal payload: #{inspect(reason)}")
+        Publisher.publish_error(event_id, reason, "Invalid confirm signal data")
+    end
+  end
 
-        Publisher.publish_error(
-          event_id,
-          reason,
-          "Invalid confirm signal data"
+  defp confirm_signal_for_application(tenant_id, payload, event_id) do
+    application_id = payload["application_id"]
+
+    case application_store().get(tenant_id, application_id) do
+      {:ok, application} ->
+        process_pending_signal(tenant_id, application_id, application, event_id)
+
+      {:error, :not_found} ->
+        Logger.error("Application not found: #{application_id}")
+        Publisher.publish_error(event_id, :not_found, "Application not found")
+
+      {:error, reason} ->
+        Logger.error("Failed to get application #{application_id}: #{inspect(reason)}")
+        Publisher.publish_error(event_id, reason, "Failed to confirm signal")
+    end
+  end
+
+  defp process_pending_signal(tenant_id, application_id, application, event_id) do
+    case application["pending_signal"] do
+      nil ->
+        Logger.warning("No pending signal found for application: #{application_id}")
+
+      signal ->
+        apply_pending_signal(tenant_id, application_id, signal, event_id)
+    end
+  end
+
+  defp apply_pending_signal(tenant_id, application_id, signal, event_id) do
+    to_state = signal["proposed_transition"]
+    metadata = %{"triggered_by" => "email_signal_confirmed", "signal_type" => signal["type"]}
+
+    case ApplicationServer.transition(application_id, to_state, metadata) do
+      {:ok, _updated_app} ->
+        clear_pending_signal(tenant_id, application_id, to_state, event_id)
+
+      {:error, reason} ->
+        Logger.error("Failed to transition application #{application_id}: #{inspect(reason)}")
+        Publisher.publish_error(event_id, reason, "Failed to confirm signal")
+    end
+  end
+
+  defp clear_pending_signal(tenant_id, application_id, to_state, event_id) do
+    case application_store().update(tenant_id, application_id, %{"pending_signal" => nil}) do
+      {:ok, updated_app} ->
+        Logger.info(
+          "Confirmed email signal for application: #{application_id}, transitioned to #{to_state}"
         )
+
+        publish_signal_cleared(updated_app, event_id)
+
+      {:error, reason} ->
+        Logger.error("Failed to clear pending signal for #{application_id}: #{inspect(reason)}")
     end
   end
 
@@ -242,64 +222,45 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
 
     case validate_transition_payload(payload) do
       :ok ->
-        application_id = payload["application_id"]
-        to_state = payload["to_state"]
-        metadata = Map.get(payload, "metadata", %{})
-
-        case ApplicationServer.transition(
-               application_id,
-               to_state,
-               metadata
-             ) do
-          {:ok, application} ->
-            Logger.info("Application transitioned to #{to_state}: #{application_id}")
-
-            # Publish state updated event
-            publish_state_updated(application, event_id)
-
-            # Handle GTD integration (only for valid applications, if enabled)
-            if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
-              if to_state in @gtd_trigger_states and is_valid_for_gtd?(application) do
-                create_gtd_task(application, to_state)
-              end
-            end
-
-          {:error, :invalid_transition} ->
-            Logger.warning("Invalid transition for application: #{application_id}")
-
-            Publisher.publish_error(
-              event_id,
-              :invalid_transition,
-              "Invalid state transition"
-            )
-
-          {:error, :not_found} ->
-            Logger.error("Application not found: #{application_id}")
-
-            Publisher.publish_error(
-              event_id,
-              :not_found,
-              "Application not found"
-            )
-
-          {:error, reason} ->
-            Logger.error("Failed to transition application: #{inspect(reason)}")
-
-            Publisher.publish_error(
-              event_id,
-              reason,
-              "Failed to transition application"
-            )
-        end
+        execute_transition(event_id, payload)
 
       {:error, reason} ->
         Logger.warning("Invalid transition payload: #{inspect(reason)}")
+        Publisher.publish_error(event_id, reason, "Invalid transition data")
+    end
+  end
 
-        Publisher.publish_error(
-          event_id,
-          reason,
-          "Invalid transition data"
-        )
+  defp execute_transition(event_id, payload) do
+    application_id = payload["application_id"]
+    to_state = payload["to_state"]
+    metadata = Map.get(payload, "metadata", %{})
+
+    case ApplicationServer.transition(application_id, to_state, metadata) do
+      {:ok, application} ->
+        handle_transition_success(application, to_state, application_id, event_id)
+
+      {:error, :invalid_transition} ->
+        Logger.warning("Invalid transition for application: #{application_id}")
+        Publisher.publish_error(event_id, :invalid_transition, "Invalid state transition")
+
+      {:error, :not_found} ->
+        Logger.error("Application not found: #{application_id}")
+        Publisher.publish_error(event_id, :not_found, "Application not found")
+
+      {:error, reason} ->
+        Logger.error("Failed to transition application: #{inspect(reason)}")
+        Publisher.publish_error(event_id, reason, "Failed to transition application")
+    end
+  end
+
+  defp handle_transition_success(application, to_state, application_id, event_id) do
+    Logger.info("Application transitioned to #{to_state}: #{application_id}")
+    publish_state_updated(application, event_id)
+
+    if Application.get_env(:bot_army_job_applications, :enable_gtd_integration, true) do
+      if to_state in @gtd_trigger_states and is_valid_for_gtd?(application) do
+        create_gtd_task(application, to_state)
+      end
     end
   end
 

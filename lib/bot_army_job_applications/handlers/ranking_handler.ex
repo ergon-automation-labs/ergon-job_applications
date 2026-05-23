@@ -83,52 +83,51 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
     try do
       applications = ApplicationStore.list(tenant_id)
       total = length(applications)
-
-      # Get ranked list
       ranked = Ranking.rank(applications)
 
-      # Apply tier filter if requested
-      filtered =
-        case tier_filter do
-          "high" ->
-            Enum.filter(ranked, fn {_, score} -> score >= 0.75 end)
-
-          "medium" ->
-            Enum.filter(ranked, fn {_, score} -> score >= 0.50 and score < 0.75 end)
-
-          "low" ->
-            Enum.filter(ranked, fn {_, score} -> score < 0.50 end)
-
-          nil ->
-            ranked
-        end
-
-      # Apply limit if requested
-      result =
-        case limit do
-          n when is_integer(n) and n > 0 -> Enum.take(filtered, n)
-          _ -> filtered
-        end
-
-      # Transform to response format
-      response_apps =
-        Enum.map(result, fn {app, score} ->
-          %{
-            "id" => app["id"],
-            "company" => app["company"],
-            "role_title" => app["role_title"],
-            "score" => Float.round(score, 3),
-            "state" => app["state"],
-            "coverage_score" => app["coverage_score"],
-            "salary_range" => app["salary_range"]
-          }
-        end)
+      filtered = apply_tier_filter(ranked, tier_filter)
+      result = apply_limit(filtered, limit)
+      response_apps = format_response(result)
 
       {:ok, response_apps, total}
     rescue
       reason ->
         {:error, reason}
     end
+  end
+
+  defp apply_tier_filter(ranked, "high") do
+    Enum.filter(ranked, fn {_, score} -> score >= 0.75 end)
+  end
+
+  defp apply_tier_filter(ranked, "medium") do
+    Enum.filter(ranked, fn {_, score} -> score >= 0.50 and score < 0.75 end)
+  end
+
+  defp apply_tier_filter(ranked, "low") do
+    Enum.filter(ranked, fn {_, score} -> score < 0.50 end)
+  end
+
+  defp apply_tier_filter(ranked, _), do: ranked
+
+  defp apply_limit(filtered, n) when is_integer(n) and n > 0 do
+    Enum.take(filtered, n)
+  end
+
+  defp apply_limit(filtered, _), do: filtered
+
+  defp format_response(result) do
+    Enum.map(result, fn {app, score} ->
+      %{
+        "id" => app["id"],
+        "company" => app["company"],
+        "role_title" => app["role_title"],
+        "score" => Float.round(score, 3),
+        "state" => app["state"],
+        "coverage_score" => app["coverage_score"],
+        "salary_range" => app["salary_range"]
+      }
+    end)
   end
 
   defp publish_ranked(applications, total, limit, event_id, tenant_id, user_id) do

@@ -29,15 +29,19 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     resume_tags = extract_resume_tags(resume)
 
     # Jaccard similarity: |intersection| / |union|
-    jaccard = if Enum.empty?(listing_tags) or Enum.empty?(resume_tags) do
-      Logger.debug("tag_overlap_score: listing_tags=#{MapSet.size(listing_tags)}, resume_tags=#{MapSet.size(resume_tags)}")
-      0.0
-    else
-      intersection = listing_tags |> MapSet.intersection(resume_tags) |> MapSet.size()
-      union = listing_tags |> MapSet.union(resume_tags) |> MapSet.size()
-      Logger.debug("tag_overlap_score: intersection=#{intersection}, union=#{union}")
-      intersection / union
-    end
+    jaccard =
+      if Enum.empty?(listing_tags) or Enum.empty?(resume_tags) do
+        Logger.debug(
+          "tag_overlap_score: listing_tags=#{MapSet.size(listing_tags)}, resume_tags=#{MapSet.size(resume_tags)}"
+        )
+
+        0.0
+      else
+        intersection = listing_tags |> MapSet.intersection(resume_tags) |> MapSet.size()
+        union = listing_tags |> MapSet.union(resume_tags) |> MapSet.size()
+        Logger.debug("tag_overlap_score: intersection=#{intersection}, union=#{union}")
+        intersection / union
+      end
 
     # Seniority level match bonus
     seniority_bonus = seniority_match_bonus(listing, resume)
@@ -53,7 +57,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
     # Blend: 50% Jaccard, 15% seniority, 15% role_type, 10% salary, 10% location
     (jaccard * 0.50 + seniority_bonus * 0.15 + role_type_bonus * 0.15 +
-     salary_bonus * 0.10 + location_bonus * 0.10)
+       salary_bonus * 0.10 + location_bonus * 0.10)
     |> max(0.0)
     |> min(1.0)
   end
@@ -66,7 +70,8 @@ defmodule BotArmyJobApplications.RecommendationScorer do
   Optimized for large listing sets: uses a heap-like approach to track only
   the top N items instead of sorting all N items.
   """
-  def shortlist(listings, resume, limit) when is_list(listings) and is_map(resume) and is_integer(limit) do
+  def shortlist(listings, resume, limit)
+      when is_list(listings) and is_map(resume) and is_integer(limit) do
     listings
     |> Enum.reduce([], fn listing, top_n ->
       score = tag_overlap_score(listing, resume)
@@ -83,12 +88,12 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     cond do
       length(top_n) < limit ->
         # Not at limit yet, insert in sorted position
-        top_n ++ [item]
+        (top_n ++ [item])
         |> Enum.sort_by(fn {_, s} -> s end, :asc)
 
       score > elem(Enum.at(top_n, 0), 1) ->
         # Score beats the minimum in top_n, replace minimum
-        tl(top_n) ++ [item]
+        (tl(top_n) ++ [item])
         |> Enum.sort_by(fn {_, s} -> s end, :asc)
 
       true ->
@@ -158,28 +163,31 @@ defmodule BotArmyJobApplications.RecommendationScorer do
   def parse_llm_score_response(text) when is_binary(text) do
     case extract_json_field(text, "score") do
       {:ok, score_value} ->
-        # Try to convert to number if it's a string
-        score_float = case score_value do
-          n when is_number(n) -> n / 100.0
-          s when is_binary(s) ->
-            case Float.parse(s) do
-              {n, _} -> n / 100.0
-              :error -> 0.5
-            end
-          _ -> 0.5
-        end
-
-        # Extract reason if available
-        reason = case extract_json_field(text, "reason") do
-          {:ok, r} when is_binary(r) -> r
-          _ -> "LLM assessment"
-        end
-
+        score_float = normalize_score(score_value)
+        reason = extract_reason(text)
         {:ok, score_float, reason}
 
       {:error, _} ->
         Logger.warning("Failed to extract score from LLM response")
         {:error, "invalid_response"}
+    end
+  end
+
+  defp normalize_score(n) when is_number(n), do: n / 100.0
+
+  defp normalize_score(s) when is_binary(s) do
+    case Float.parse(s) do
+      {n, _} -> n / 100.0
+      :error -> 0.5
+    end
+  end
+
+  defp normalize_score(_), do: 0.5
+
+  defp extract_reason(text) do
+    case extract_json_field(text, "reason") do
+      {:ok, r} when is_binary(r) -> r
+      _ -> "LLM assessment"
     end
   end
 
@@ -193,11 +201,12 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     frameworks = jd_tags["frameworks"] || []
 
     # If no structured tags, extract keywords from jd_text
-    tags = if Enum.empty?(technologies) and Enum.empty?(frameworks) do
-      extract_keywords_from_text(listing["jd_text"] || "")
-    else
-      technologies ++ frameworks
-    end
+    tags =
+      if Enum.empty?(technologies) and Enum.empty?(frameworks) do
+        extract_keywords_from_text(listing["jd_text"] || "")
+      else
+        technologies ++ frameworks
+      end
 
     tags
     |> Enum.map(&String.downcase/1)
@@ -219,20 +228,23 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     )
 
     text_lower = String.downcase(text)
+
     keywords
     |> Enum.filter(&String.contains?(text_lower, &1))
   end
 
   defp extract_resume_tags(resume) do
     # Skill names + all skill tags
-    skill_tags = (resume["skills"] || [])
+    skill_tags =
+      (resume["skills"] || [])
       |> Enum.flat_map(fn skill ->
         [String.downcase(skill["name"])] ++ (skill["tags"] || [])
       end)
       |> Enum.map(&String.downcase/1)
 
     # Bullet tags from all roles
-    bullet_tags = (resume["roles"] || [])
+    bullet_tags =
+      (resume["roles"] || [])
       |> Enum.flat_map(fn role ->
         role["bullets"] || []
       end)
@@ -257,11 +269,13 @@ defmodule BotArmyJobApplications.RecommendationScorer do
       # Get job's salary max (or min if max unavailable)
       job_max = salary_range["max"]
       job_min = salary_range["min"]
-      job_salary = cond do
-        is_number(job_max) -> job_max
-        is_number(job_min) -> job_min
-        true -> nil
-      end
+
+      job_salary =
+        cond do
+          is_number(job_max) -> job_max
+          is_number(job_min) -> job_min
+          true -> nil
+        end
 
       # Compare against floor: scale penalty/bonus
       cond do
@@ -278,7 +292,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
         true ->
           # Job is below floor: penalty
           # Scale from 0.5 (at floor) to 0.0 (at 0.5x floor)
-          penalty = (job_salary / salary_floor) * 0.5
+          penalty = job_salary / salary_floor * 0.5
           max(penalty, 0.0)
       end
     end
@@ -288,6 +302,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   defp parse_location_preferences(resume) when is_map(resume) do
     prefs = get_in(resume, ["identity", "location_preferences"]) || ""
+
     if is_binary(prefs) and prefs != "" do
       prefs
       |> String.split("\n")
@@ -309,7 +324,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     # Remote or hybrid jobs always match (no geographic constraint)
     is_remote_job =
       location_kind in ["remote", "hybrid"] or
-      Regex.match?(~r/(remote|work from home)/i, location_name)
+        Regex.match?(~r/(remote|work from home)/i, location_name)
 
     if is_remote_job do
       1.0
@@ -324,15 +339,15 @@ defmodule BotArmyJobApplications.RecommendationScorer do
         # Check if job city is in preferences (partial match)
         job_city_in_prefs =
           location_name != "" and
-          Enum.any?(pref_list, fn pref ->
-            String.contains?(location_name, pref) or String.contains?(pref, location_name)
-          end)
+            Enum.any?(pref_list, fn pref ->
+              String.contains?(location_name, pref) or String.contains?(pref, location_name)
+            end)
 
         cond do
           user_wants_remote and job_city_in_prefs -> 0.8
-          user_wants_remote                       -> 0.2
-          job_city_in_prefs                       -> 1.0
-          true                                    -> 0.3
+          user_wants_remote -> 0.2
+          job_city_in_prefs -> 1.0
+          true -> 0.3
         end
       end
     end
@@ -374,9 +389,10 @@ defmodule BotArmyJobApplications.RecommendationScorer do
       0.5
     else
       # Check if any target role is mentioned in role_title (partial match)
-      role_match = Enum.any?(target_roles, fn target_role ->
-        String.contains?(String.downcase(role_title), String.downcase(target_role))
-      end)
+      role_match =
+        Enum.any?(target_roles, fn target_role ->
+          String.contains?(String.downcase(role_title), String.downcase(target_role))
+        end)
 
       # Also check extracted role_type if available
       type_match = listing_role_type && listing_role_type in target_roles
@@ -433,23 +449,26 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
     preferences = []
 
-    preferences = if !Enum.empty?(target_seniority) do
-      preferences ++ ["Target Seniority: #{Enum.join(target_seniority, ", ")}"]
-    else
-      preferences
-    end
+    preferences =
+      if !Enum.empty?(target_seniority) do
+        preferences ++ ["Target Seniority: #{Enum.join(target_seniority, ", ")}"]
+      else
+        preferences
+      end
 
-    preferences = if !Enum.empty?(target_roles) do
-      preferences ++ ["Target Role Types: #{Enum.join(target_roles, ", ")}"]
-    else
-      preferences
-    end
+    preferences =
+      if !Enum.empty?(target_roles) do
+        preferences ++ ["Target Role Types: #{Enum.join(target_roles, ", ")}"]
+      else
+        preferences
+      end
 
-    preferences = if !Enum.empty?(target_skills) do
-      preferences ++ ["Interested in: #{Enum.join(target_skills, ", ")}"]
-    else
-      preferences
-    end
+    preferences =
+      if !Enum.empty?(target_skills) do
+        preferences ++ ["Interested in: #{Enum.join(target_skills, ", ")}"]
+      else
+        preferences
+      end
 
     if Enum.empty?(preferences) do
       ""
@@ -460,12 +479,14 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
   defp parse_target_list(nil), do: []
   defp parse_target_list(""), do: []
+
   defp parse_target_list(str) when is_binary(str) do
     str
     |> String.split("\n")
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
   end
+
   defp parse_target_list(_), do: []
 
   defp build_experience_summary(resume) do
@@ -483,7 +504,9 @@ defmodule BotArmyJobApplications.RecommendationScorer do
 
         # Include top 2 bullets as accomplishment highlights
         bullets = role["bullets"] || []
-        bullet_text = bullets
+
+        bullet_text =
+          bullets
           |> Enum.take(2)
           |> Enum.map(fn bullet ->
             text = if is_map(bullet), do: bullet["text"] || "", else: bullet
@@ -530,27 +553,33 @@ defmodule BotArmyJobApplications.RecommendationScorer do
     location = listing["location"] || %{}
 
     # Truncate JD text to reasonable length if needed (e.g., first 1500 chars)
-    jd_preview = if String.length(jd_text) > 1500 do
-      String.slice(jd_text, 0, 1500) <> "\n... [full JD available]"
-    else
-      jd_text
-    end
+    jd_preview =
+      if String.length(jd_text) > 1500 do
+        String.slice(jd_text, 0, 1500) <> "\n... [full JD available]"
+      else
+        jd_text
+      end
 
-    salary_line = case {salary_range["min"], salary_range["max"]} do
-      {min, max} when is_number(min) and is_number(max) ->
-        "Salary Range: $#{min}k - $#{max}k"
-      {min, _} when is_number(min) ->
-        "Starting Salary: $#{min}k+"
-      _ ->
-        "Salary: Not specified"
-    end
+    salary_line =
+      case {salary_range["min"], salary_range["max"]} do
+        {min, max} when is_number(min) and is_number(max) ->
+          "Salary Range: $#{min}k - $#{max}k"
 
-    location_line = case location do
-      %{"name" => name} when is_binary(name) and name != "" ->
-        "Location: #{name}"
-      _ ->
-        "Location: Not specified"
-    end
+        {min, _} when is_number(min) ->
+          "Starting Salary: $#{min}k+"
+
+        _ ->
+          "Salary: Not specified"
+      end
+
+    location_line =
+      case location do
+        %{"name" => name} when is_binary(name) and name != "" ->
+          "Location: #{name}"
+
+        _ ->
+          "Location: Not specified"
+      end
 
     """
     ROLE: #{role}
@@ -570,6 +599,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
   defp extract_json_field(text, field) when is_binary(text) and is_binary(field) do
     # Try to find JSON in markdown code block first
     json_regex = ~r/```(?:json)?\s*\n([\s\S]*?)\n```/
+
     case Regex.run(json_regex, text, capture: :all_but_first) do
       [json_str] ->
         try_parse_json_field(json_str, field)
@@ -593,6 +623,7 @@ defmodule BotArmyJobApplications.RecommendationScorer do
       {:error, _} ->
         # Try regex for simple field extraction
         pattern = ~r/"#{field}"\s*:\s*([^,}]+)/
+
         case Regex.run(pattern, text, capture: :all_but_first) do
           [value] -> {:ok, String.trim(value)}
           nil -> {:error, "parse_error"}

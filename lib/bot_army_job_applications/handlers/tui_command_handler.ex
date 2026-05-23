@@ -13,11 +13,19 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   require Logger
 
   defp application_store do
-    Application.get_env(:bot_army_job_applications, :application_store, BotArmyJobApplications.ApplicationStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :application_store,
+      BotArmyJobApplications.ApplicationStore
+    )
   end
 
   defp listing_store do
-    Application.get_env(:bot_army_job_applications, :listing_store, BotArmyJobApplications.ListingStore)
+    Application.get_env(
+      :bot_army_job_applications,
+      :listing_store,
+      BotArmyJobApplications.ListingStore
+    )
   end
 
   @doc """
@@ -48,92 +56,97 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   def handle_create(message) when is_map(message) do
     %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
-    # Check if this is a listing_id-based create (from listings view)
+
+    with {company, role, jd_url} <- resolve_company_and_role(tenant_id, payload),
+         true <- company != "" and role != "",
+         create_payload <-
+           build_create_payload(tenant_id, user_id, company, role, jd_url, payload),
+         {:ok, application} <- application_store().create(create_payload) do
+      finalize_application_creation(application, tenant_id)
+    else
+      false ->
+        Logger.warning("TUI create: company and role required")
+        {:error, :invalid_payload}
+
+      {:error, reason} ->
+        Logger.error("TUI create failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp resolve_company_and_role(tenant_id, payload) do
     listing_id = trim(payload["listing_id"])
 
-    {company, role, jd_url} =
-      if listing_id != "" do
-        # Look up listing to get company and role
-        case listing_store().get(tenant_id, listing_id) do
-          {:ok, listing} ->
-            {
-              listing["company"] || "",
-              listing["role_title"] || listing["title"] || "",
-              listing["jd_url"] || ""
-            }
+    if listing_id != "" do
+      case listing_store().get(tenant_id, listing_id) do
+        {:ok, listing} ->
+          {listing["company"] || "", listing["role_title"] || listing["title"] || "",
+           listing["jd_url"] || ""}
 
-          {:error, _reason} ->
-            Logger.warning("TUI create: listing #{listing_id} not found")
-            {"", "", ""}
-        end
-      else
-        {
-          trim(payload["company"]),
-          trim(payload["role"]),
-          trim(payload["jd_url"] || "")
-        }
+        {:error, _reason} ->
+          Logger.warning("TUI create: listing #{listing_id} not found")
+          {"", "", ""}
       end
+    else
+      {trim(payload["company"]), trim(payload["role"]), trim(payload["jd_url"] || "")}
+    end
+  end
 
+  defp build_create_payload(tenant_id, user_id, company, role, jd_url, payload) do
     status = trim(payload["status"]) || "Applied"
     stage = trim(payload["stage"])
-    _location = trim(payload["location"])
-    _last_contact = trim(payload["last_contact"])
     notes = trim(payload["notes"])
+    state = tui_status_to_state(status)
 
-    if company == "" or role == "" do
-      Logger.warning("TUI create: company and role required")
-      {:error, :invalid_payload}
-    else
-      state = tui_status_to_state(status)
-      create_payload = %{
-        "tenant_id" => tenant_id,
-        "user_id" => user_id,
-        "company" => company,
-        "role_title" => role,
-        "state" => state,
-        "history" => [
-          %{
-            "from_state" => nil,
-            "to_state" => state,
-            "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
-            "metadata" => %{"reason" => "tui_create"}
-          }
-        ]
-      }
+    create_payload = %{
+      "tenant_id" => tenant_id,
+      "user_id" => user_id,
+      "company" => company,
+      "role_title" => role,
+      "state" => state,
+      "history" => [
+        %{
+          "from_state" => nil,
+          "to_state" => state,
+          "transitioned_at" =>
+            NaiveDateTime.utc_now()
+            |> NaiveDateTime.truncate(:second)
+            |> NaiveDateTime.to_iso8601(),
+          "metadata" => %{"reason" => "tui_create"}
+        }
+      ]
+    }
 
-      create_payload =
-        if stage != "", do: Map.put(create_payload, "next_action", stage), else: create_payload
-      create_payload =
-        if notes != "", do: Map.put(create_payload, "strategy", notes), else: create_payload
-      # Use jd_url from listing if available, else use from payload
-      jd_url =
-        if jd_url != "" do
-          jd_url
-        else
-          trim(payload["jd_url"] || "")
-        end
-      create_payload =
-        if jd_url != "", do: Map.put(create_payload, "jd_url", jd_url), else: create_payload
-      create_payload =
-        case {payload["salary_min"], payload["salary_max"]} do
-          {min, max} when is_number(min) and is_number(max) -> Map.put(create_payload, "salary_range", %{"min" => min, "max" => max})
-          _ -> create_payload
-        end
+    create_payload
+    |> maybe_put("next_action", stage)
+    |> maybe_put("strategy", notes)
+    |> maybe_put("jd_url", jd_url)
+    |> maybe_put_salary(payload)
+  end
 
-      case application_store().create(create_payload) do
-        {:ok, application} ->
-          if not BotArmyJobApplications.Commands.terminal?(state) do
-            BotArmyJobApplications.ApplicationSupervisor.start_child(application["id"])
-          end
-          Logger.info("TUI create: application #{application["id"]} (#{company} / #{role})")
-          publish_snapshot(tenant_id)
-          {:ok, application}
+  defp maybe_put(payload, _key, ""), do: payload
+  defp maybe_put(payload, key, value), do: Map.put(payload, key, value)
 
-        {:error, reason} ->
-          Logger.error("TUI create failed: #{inspect(reason)}")
-          {:error, reason}
-      end
+  defp maybe_put_salary(payload, %{"salary_min" => min, "salary_max" => max})
+       when is_number(min) and is_number(max) do
+    Map.put(payload, "salary_range", %{"min" => min, "max" => max})
+  end
+
+  defp maybe_put_salary(payload, _), do: payload
+
+  defp finalize_application_creation(application, tenant_id) do
+    state = application["state"]
+
+    if not BotArmyJobApplications.Commands.terminal?(state) do
+      BotArmyJobApplications.ApplicationSupervisor.start_child(application["id"])
     end
+
+    Logger.info(
+      "TUI create: application #{application["id"]} (#{application["company"]} / #{application["role_title"]})"
+    )
+
+    publish_snapshot(tenant_id)
+    {:ok, application}
   end
 
   def handle_create(_), do: {:error, :invalid_payload}
@@ -148,70 +161,81 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
     id = payload["id"]
     company = trim(payload["company"])
     role = trim(payload["role"])
-    status = trim(payload["status"]) || "Applied"
-    stage = trim(payload["stage"])
-    _location = trim(payload["location"])
-    _last_contact = trim(payload["last_contact"])
-    notes = trim(payload["notes"])
 
     if not is_binary(id) or id == "" or company == "" or role == "" do
       Logger.warning("TUI update: id, company, and role required")
       {:error, :invalid_payload}
     else
-      to_state = tui_status_to_state(status)
-
-      case application_store().get(tenant_id, id) do
-        {:ok, app} ->
-          from_state = app["state"] || "identified"
-          new_history = app["history"] || []
-          new_history =
-            if from_state != to_state do
-              event = %{
-                "from_state" => from_state,
-                "to_state" => to_state,
-                "transitioned_at" =>
-                  NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
-                "metadata" => %{"reason" => "tui_edit"}
-              }
-              new_history ++ [event]
-            else
-              new_history
-            end
-
-          jd_url = trim(payload["jd_url"])
-          salary_range =
-            case {payload["salary_min"], payload["salary_max"]} do
-              {min, max} when is_number(min) and is_number(max) -> %{"min" => min, "max" => max}
-              _ -> nil
-            end
-
-          update_payload = %{
-            "company" => company,
-            "role_title" => role,
-            "state" => to_state,
-            "next_action" => (stage != "" && stage) || nil,
-            "strategy" => (notes != "" && notes) || nil,
-            "history" => new_history,
-            "jd_url" => (jd_url != "" && jd_url) || nil,
-            "salary_range" => salary_range
-          }
-
-          case application_store().update(tenant_id, id, update_payload) do
-            {:ok, _} ->
-              Logger.info("TUI update: application #{id} (#{company} / #{role})")
-              publish_snapshot(tenant_id)
-              {:ok, id}
-
-            {:error, reason} ->
-              Logger.warning("TUI update failed for #{id}: #{inspect(reason)}")
-              {:error, reason}
-          end
-
-        {:error, :not_found} ->
-          Logger.warning("TUI update: application #{id} not found")
-          {:error, :not_found}
-      end
+      perform_update(tenant_id, id, company, role, payload)
     end
+  end
+
+  defp perform_update(tenant_id, id, company, role, payload) do
+    case application_store().get(tenant_id, id) do
+      {:ok, app} ->
+        to_state = tui_status_to_state(trim(payload["status"]) || "Applied")
+        new_history = build_history(app, to_state, payload)
+        update_payload = build_update_payload(company, role, to_state, new_history, payload)
+
+        case application_store().update(tenant_id, id, update_payload) do
+          {:ok, _} ->
+            Logger.info("TUI update: application #{id} (#{company} / #{role})")
+            publish_snapshot(tenant_id)
+            {:ok, id}
+
+          {:error, reason} ->
+            Logger.warning("TUI update failed for #{id}: #{inspect(reason)}")
+            {:error, reason}
+        end
+
+      {:error, :not_found} ->
+        Logger.warning("TUI update: application #{id} not found")
+        {:error, :not_found}
+    end
+  end
+
+  defp build_history(app, to_state, payload) do
+    from_state = app["state"] || "identified"
+    old_history = app["history"] || []
+
+    if from_state != to_state do
+      event = %{
+        "from_state" => from_state,
+        "to_state" => to_state,
+        "transitioned_at" =>
+          NaiveDateTime.utc_now()
+          |> NaiveDateTime.truncate(:second)
+          |> NaiveDateTime.to_iso8601(),
+        "metadata" => %{"reason" => "tui_edit"}
+      }
+
+      old_history ++ [event]
+    else
+      old_history
+    end
+  end
+
+  defp build_update_payload(company, role, to_state, new_history, payload) do
+    stage = trim(payload["stage"])
+    notes = trim(payload["notes"])
+    jd_url = trim(payload["jd_url"])
+
+    salary_range =
+      case {payload["salary_min"], payload["salary_max"]} do
+        {min, max} when is_number(min) and is_number(max) -> %{"min" => min, "max" => max}
+        _ -> nil
+      end
+
+    %{
+      "company" => company,
+      "role_title" => role,
+      "state" => to_state,
+      "next_action" => (stage != "" && stage) || nil,
+      "strategy" => (notes != "" && notes) || nil,
+      "history" => new_history,
+      "jd_url" => (jd_url != "" && jd_url) || nil,
+      "salary_range" => salary_range
+    }
   end
 
   def handle_update(_), do: {:error, :invalid_payload}
@@ -236,6 +260,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
           rescue
             _ -> :ok
           end
+
           Logger.info("TUI delete: application #{id}")
           publish_snapshot(tenant_id)
           :ok
@@ -272,16 +297,23 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
       case application_store().get(tenant_id, id) do
         {:ok, app} ->
           from_state = app["state"] || "identified"
+
           event = %{
             "from_state" => from_state,
             "to_state" => to_state,
             "transitioned_at" =>
-              NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
+              NaiveDateTime.utc_now()
+              |> NaiveDateTime.truncate(:second)
+              |> NaiveDateTime.to_iso8601(),
             "metadata" => %{"triggered_by" => "tui"}
           }
+
           new_history = (app["history"] || []) ++ [event]
 
-          case application_store().update(tenant_id, id, %{"state" => to_state, "history" => new_history}) do
+          case application_store().update(tenant_id, id, %{
+                 "state" => to_state,
+                 "history" => new_history
+               }) do
             {:ok, _} ->
               Logger.info("TUI update_status: #{id} -> #{to_state}")
               publish_snapshot(tenant_id)
