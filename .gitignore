@@ -26,3 +26,7 @@ Thumbs.db
 
 # Mix
 *.mix.lock
+
+# Build artifacts
+*.tar.gz
+*.tar.xz
