@@ -1,7 +1,7 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 MIX ?= /Users/abby/.local/share/mise/shims/mix
 
-.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -133,32 +133,15 @@ build-native: deps
 	@echo "Building with local Elixir (Mix)..."
 	$(MIX) compile
 
-# Run tests (default: Docker)
-test: test-docker
+# Run tests (native Mix, same as other bots)
+test:
+	$(MIX) test
 
 test-docker:
 	@echo "Running tests with Docker..."
 	docker compose run --rm job_applications mix test
 
-test-handlers:
-	MIX_ENV=test $(MIX) test --only handlers --trace
-
-test-stores:
-	MIX_ENV=test $(MIX) test --only stores --trace
-
-test-nats:
-	MIX_ENV=test $(MIX) test --only nats --trace
-
-test-integration:
-	$(MIX) test --include integration --trace
-
-test-full:
-	$(MIX) test --include integration --include nats_live --trace
-
-# Bare-metal tests (requires Elixir, PostgreSQL running locally)
-test-native: setup-db
-	@echo "Running tests locally..."
-	$(MIX) test
+test-native: test
 
 # Docker Compose stack (all services: NATS, Postgres, bot, etc.)
 start:
