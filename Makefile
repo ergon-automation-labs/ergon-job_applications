@@ -189,8 +189,8 @@ publish-release: release
 	@echo "==============================================="
 	@echo ""
 
-	# Get version from release metadata (release name must match mix.exs)
-	VERSION=$$(cat _build/prod/rel/bot_army_job_applications/releases/RELEASES | tail -1 | cut -d' ' -f2); \
+	# Get version from release directory name
+	VERSION=$$(ls _build/prod/rel/bot_army_job_applications/releases/ | grep -E '^[0-9]' | sort -V | tail -1); \
 	echo "Release version: $$VERSION"; \
 	\
 	# Create tarball
