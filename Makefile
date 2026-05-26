@@ -184,33 +184,26 @@ release: check
 	@echo ""
 
 publish-release: release
-	@echo "==============================================="
-	@echo "Publishing release to GitHub"
-	@echo "==============================================="
-	@echo ""
-
-	# Get version from release directory name
-	VERSION=$$(ls _build/prod/rel/bot_army_job_applications/releases/ | grep -E '^[0-9]' | sort -V | tail -1); \
-	echo "Release version: $$VERSION"; \
-	\
-	# Create tarball
+	@set -e; \
+	VERSION=$$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\([^"]*\)".*/\1/p' mix.exs | head -n 1); \
+	if [ -z "$$VERSION" ]; then \
+		echo "Failed to resolve version from mix.exs"; \
+		exit 1; \
+	fi; \
+	TARBALL=bot_army_job_applications-$$VERSION.tar.gz; \
+	echo "Version: $$VERSION"; \
 	echo "Creating release tarball..."; \
-	tar -czf bot_army_job_applications-$$VERSION.tar.gz -C _build/prod/rel bot_army_job_applications/; \
-	echo "✓ Created: bot_army_job_applications-$$VERSION.tar.gz"; \
-	echo ""; \
-	\
-	# Create GitHub release
+	tar -czf "$$TARBALL" -C _build/prod/rel bot_army_job_applications/; \
+	echo "✓ Created: $$TARBALL"; \
 	echo "Publishing to GitHub releases..."; \
-	gh release create v$$VERSION bot_army_job_applications-$$VERSION.tar.gz \
+	gh release create v$$VERSION "$$TARBALL" \
 		--title "Release v$$VERSION" \
 		--notes "Job Applications Bot Elixir release v$$VERSION. Download and deploy with Jenkins." \
 		--draft=false; \
 	echo "✓ Release published to GitHub"; \
 	echo ""; \
 	echo "Next steps:"; \
-	echo "1. Jenkins will automatically detect the new release"; \
-	echo "2. Trigger deployment in Jenkins UI or wait for auto-deployment"; \
-	echo "3. Check deployment status in Jenkins dashboard"; \
+	echo "1. Deploy via: make deploy-bot BOT=job_applications"; \
 	echo ""
 
 discover-boards:
