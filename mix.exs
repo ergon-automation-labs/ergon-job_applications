@@ -4,7 +4,7 @@ defmodule BotArmyJobApplications.MixProject do
   def project do
     [
       app: :bot_army_job_applications,
-      version: "0.2.55",
+      version: "0.2.56",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -28,6 +28,7 @@ defmodule BotArmyJobApplications.MixProject do
     [
       {:bot_army_library_core, path: "../bot_army_library_core"},
       {:bot_army_library_runtime, path: "../bot_army_library_runtime"},
+      {:bot_army_library_learning, path: "../bot_army_library_learning"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, "~> 0.17"},
       {:jason, "~> 1.4"},
