@@ -24,8 +24,7 @@ config :bot_army_job_applications, ecto_repos: [BotArmyJobApplications.Repo]
 
 config :logger,
   level: :info,
-  backends: [:console],
-  default_formatter: {BotArmyRuntime.LoggerFormatter, []}
+  backends: [:console]
 
 config :logger, :console,
   format: {BotArmyRuntime.LoggerFormatter, []},
