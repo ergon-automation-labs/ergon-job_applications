@@ -23,15 +23,13 @@ config :bot_army_job_applications, ecto_repos: [BotArmyJobApplications.Repo]
 # (not at compile time, which is what config.exs does)
 
 config :logger,
-  level: :debug
+  level: :info,
+  backends: [:console],
+  default_formatter: {BotArmyRuntime.LoggerFormatter, []}
 
-# Job listing ingestion (Phase 2): Greenhouse and Lever boards to fetch.
-# Example:
-#   config :bot_army_job_applications, :ingestion_boards, [
-#     %{source: "greenhouse", board_token: "stripe", company_name: "Stripe"},
-#     %{source: "lever", site: "lever", company_name: "Lever"}
-#   ]
-# Fetch interval: default 6 hours. Set ingestion_interval_ms to 0 to disable periodic fetch (use job.listings.fetch.request to trigger).
+config :logger, :console,
+  format: {BotArmyRuntime.LoggerFormatter, []},
+  metadata: [:correlation_id]
 config :bot_army_job_applications, :ingestion_boards, []
 config :bot_army_job_applications, :ingestion_interval_ms, 6 * 60 * 60 * 1000
 
