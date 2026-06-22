@@ -27,8 +27,9 @@ config :logger,
   backends: [:console]
 
 config :logger, :console,
-  format: {BotArmyRuntime.LoggerFormatter, []},
+  format: "[$level] $message\n",
   metadata: [:correlation_id]
+
 config :bot_army_job_applications, :ingestion_boards, []
 config :bot_army_job_applications, :ingestion_interval_ms, 6 * 60 * 60 * 1000
 
