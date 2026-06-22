@@ -58,10 +58,10 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
       file_path = source_metadata["file_path"]
       original_filename = source_metadata["original_filename"]
 
-      case extract_json_field(payload["completion"], "identity") do
-        {:ok, identity} ->
+      case extract_json_field(payload["completion"]) do
+        {:ok, full_resume} ->
           # Validate we have required fields
-          case validate_parsed_resume(identity, payload["completion"]) do
+          case validate_parsed_resume(full_resume, payload["completion"]) do
             {:ok, parsed_data} ->
               persist_resume(parsed_data, file_path, original_filename, tenant_id, user_id)
 
@@ -141,16 +141,16 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     }
 
     case BotArmyJobApplications.NATS.Publisher.publish_llm_request_with_metadata(
-      llm_payload,
-      "resume_parse",
-      nil,
-      %{
-        "file_path" => file_path,
-        "original_filename" => original_filename,
-        "tenant_id" => tenant_id,
-        "user_id" => user_id
-      }
-    ) do
+           llm_payload,
+           "resume_parse",
+           nil,
+           %{
+             "file_path" => file_path,
+             "original_filename" => original_filename,
+             "tenant_id" => tenant_id,
+             "user_id" => user_id
+           }
+         ) do
       :ok ->
         Logger.info("Initiated resume parse for: #{original_filename}")
 
@@ -160,11 +160,19 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     end
   end
 
-  defp validate_parsed_resume(_identity, _raw_text) do
-    # For now, just validate that we got something
-    # In the future, could do stricter validation
-    {:ok, %{}}
+  defp validate_parsed_resume(parsed_resume, _raw_text) when is_map(parsed_resume) do
+    # Verify minimal structure: identity should exist
+    case parsed_resume do
+      %{"identity" => identity} when is_map(identity) ->
+        # Include full parsed resume in validated output
+        {:ok, parsed_resume}
+
+      _ ->
+        {:error, :missing_identity_section}
+    end
   end
+
+  defp validate_parsed_resume(_, _), do: {:error, :invalid_resume_format}
 
   defp persist_resume(parsed_data, file_path, original_filename, tenant_id, user_id) do
     case extract_full_resume_from_llm(parsed_data) do
@@ -194,17 +202,12 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     end
   end
 
-  # Extract the full parsed JSON from LLM response text
-  # The LLM returns the full JSON in its response
-  defp extract_full_resume_from_llm(_parsed_data) do
-    # In this implementation, we rely on the earlier extract_json_field call
-    # For a full implementation, we'd parse the full JSON here
-    {:ok, %{
-      "identity" => %{"name" => "", "summary" => ""},
-      "roles" => [],
-      "skills" => []
-    }}
+  # The full parsed resume is already extracted by extract_json_field
+  defp extract_full_resume_from_llm(parsed_data) when is_map(parsed_data) do
+    {:ok, parsed_data}
   end
+
+  defp extract_full_resume_from_llm(_), do: {:error, :invalid_parsed_data}
 
   defp publish_resume_created(resume, tenant_id, user_id) do
     event = %{
@@ -253,16 +256,22 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
     node() |> Atom.to_string()
   end
 
+  defp extract_json_field(text) when is_binary(text) do
+    extract_json_field(text, nil)
+  end
+
   defp extract_json_field(text, _field_name) when is_binary(text) do
     # Try to extract JSON from text (may be wrapped in code fences)
     text_clean = String.trim(text)
 
     # Remove markdown code fences if present
-    json_text = case text_clean do
-      "```json\n" <> rest -> String.slice(rest, 0..-5//-1)  # Remove trailing ```
-      "```" <> rest -> String.slice(rest, 0..-5//-1)
-      _ -> text_clean
-    end
+    json_text =
+      case text_clean do
+        # Remove trailing ```
+        "```json\n" <> rest -> String.slice(rest, 0..-5//-1)
+        "```" <> rest -> String.slice(rest, 0..-5//-1)
+        _ -> text_clean
+      end
 
     case Jason.decode(json_text) do
       {:ok, data} when is_map(data) ->

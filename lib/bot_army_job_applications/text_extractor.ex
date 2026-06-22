@@ -1,105 +1,99 @@
 defmodule BotArmyJobApplications.TextExtractor do
   @moduledoc """
-  Extracts text from various resume file formats (PDF, DOCX, XLSX, MD, TXT).
+  Extracts text from resume files (PDF, DOCX, TXT, MD).
   """
 
   require Logger
 
   @doc """
-  Extract text from a file.
-  Supports: .md, .txt, .pdf, .docx, .doc
-  Returns {:ok, text} or {:error, reason}
-  """
-  def extract(file_path, original_filename)
-      when is_binary(file_path) and is_binary(original_filename) do
-    extension = Path.extname(original_filename) |> String.downcase()
+  Extract text from a resume file.
 
-    case extension do
-      ".md" -> extract_markdown(file_path)
-      ".txt" -> extract_text(file_path)
-      ".pdf" -> extract_pdf(file_path)
-      ".docx" -> extract_docx(file_path)
-      ".doc" -> extract_doc(file_path)
-      _ -> {:error, {:unsupported_format, extension}}
+  Supports: .pdf, .docx, .txt, .md
+
+  Returns: {:ok, text} or {:error, reason}
+  """
+  def extract(file_path, _original_filename) do
+    if not File.exists?(file_path) do
+      {:error, "file not found"}
+    else
+      ext = file_path |> Path.extname() |> String.downcase()
+
+      case ext do
+        ".pdf" -> extract_pdf(file_path)
+        ".docx" -> extract_docx(file_path)
+        ".txt" -> extract_txt(file_path)
+        ".md" -> extract_markdown(file_path)
+        _ -> {:error, "unsupported file format: #{ext}"}
+      end
     end
   end
 
-  # Extract from Markdown (simple file read)
-  defp extract_markdown(file_path) do
-    File.read(file_path)
-  end
-
-  # Extract from plain text
-  defp extract_text(file_path) do
-    File.read(file_path)
-  end
-
-  # Extract from PDF using pdftotext command
   defp extract_pdf(file_path) do
-    case System.cmd("pdftotext", [file_path, "-"]) do
+    case System.cmd("pdftotext", [file_path, "-"], stderr_to_stdout: true) do
       {text, 0} ->
-        {:ok, text}
+        {:ok, String.trim(text)}
 
-      {_output, code} ->
-        Logger.error("pdftotext failed with exit code #{code}")
-        {:error, {:pdf_extraction_failed, code}}
+      {error, _code} ->
+        Logger.warning("pdftotext failed for #{file_path}: #{error}")
+        fallback_text_extraction(file_path)
     end
   rescue
-    e ->
-      Logger.error("pdftotext not available: #{inspect(e)}")
-      {:error, {:pdftotext_not_available, e}}
+    _e ->
+      fallback_text_extraction(file_path)
   end
 
-  # Extract from DOCX (Office Open XML)
   defp extract_docx(file_path) do
-    extract_office_xml(file_path)
+    case System.cmd("python3", ["-m", "docx2txt", file_path], stderr_to_stdout: true) do
+      {text, 0} ->
+        {:ok, String.trim(text)}
+
+      {error, _code} ->
+        Logger.warning("docx2txt failed for #{file_path}: #{error}")
+        fallback_text_extraction(file_path)
+    end
+  rescue
+    _e ->
+      fallback_text_extraction(file_path)
   end
 
-  # Extract from DOC (legacy Office format) - treat like DOCX for now
-  defp extract_doc(file_path) do
-    extract_office_xml(file_path)
-  end
+  defp extract_txt(file_path) do
+    case File.read(file_path) do
+      {:ok, content} ->
+        {:ok, String.trim(content)}
 
-  # Extract text from Office XML format (DOCX/XLSX have same internal structure)
-  defp extract_office_xml(file_path) do
-    with {:ok, zip_data} <- File.read(file_path),
-         {:ok, files} <- :zip.unzip(zip_data, [:memory]),
-         {:ok, doc_xml} <- find_document_xml(files) do
-      text = parse_office_xml(doc_xml)
-      {:ok, text}
-    else
       {:error, reason} ->
-        Logger.error("Failed to extract from Office document: #{inspect(reason)}")
         {:error, reason}
     end
-  rescue
-    e ->
-      Logger.error("Error extracting from Office document: #{inspect(e)}")
-      {:error, {:office_extraction_failed, e}}
   end
 
-  # Find the document.xml file in the Office package
-  defp find_document_xml(files) do
-    case Enum.find(files, fn {name, _content} ->
-           String.contains?(to_string(name), "word/document.xml")
-         end) do
-      {_name, content} -> {:ok, content}
-      nil -> {:error, :document_xml_not_found}
+  defp extract_markdown(file_path) do
+    case File.read(file_path) do
+      {:ok, content} ->
+        {:ok, String.trim(content)}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
-  # Parse Office XML and extract text content
-  defp parse_office_xml(xml) when is_binary(xml) do
-    # Simple approach: remove all XML tags and keep text content
-    xml
-    |> String.replace(~r/<[^>]+>/, " ")
-    |> String.replace(~r/\s+/, " ")
-    |> String.trim()
-  end
+  defp fallback_text_extraction(file_path) do
+    case File.read(file_path) do
+      {:ok, content} ->
+        text =
+          content
+          |> String.replace(<<0>>, "")
+          |> String.replace(~r/[[:cntrl:]]/, " ")
+          |> String.replace(~r/\s+/, " ")
+          |> String.trim()
 
-  defp parse_office_xml(xml) when is_list(xml) do
-    xml
-    |> List.to_string()
-    |> parse_office_xml()
+        if byte_size(text) > 100 do
+          {:ok, text}
+        else
+          {:error, "unable to extract meaningful text from file"}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 end
