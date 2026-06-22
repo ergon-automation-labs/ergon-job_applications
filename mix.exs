@@ -4,13 +4,13 @@ defmodule BotArmyJobApplications.MixProject do
   def project do
     [
       app: :bot_army_job_applications,
-      version: "0.2.63",
+      version: "0.2.64",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [
-        # Release name must match Salt/infra: .../current/bot_army_job_applications/bin/bot_army_job_applications
-        bot_army_job_applications: [
+        # Release name must match Salt/infra
+        job_applications_bot: [
           applications: [bot_army_job_applications: :permanent]
         ]
       ]
