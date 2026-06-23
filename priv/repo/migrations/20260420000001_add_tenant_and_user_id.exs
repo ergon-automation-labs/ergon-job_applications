@@ -19,20 +19,8 @@ defmodule BotArmyJobApplications.Repo.Migrations.AddTenantAndUserId do
       )
     end
 
-    # Add tenant_id and user_id to skills (resume_skills) (idempotent)
-    unless Ecto.Migration.column_exists?(:resume_skills, :tenant_id) do
-      alter table(:resume_skills) do
-        add(:tenant_id, :uuid, null: true)
-        add(:user_id, :uuid, null: true)
-      end
-
-      create(index(:resume_skills, [:tenant_id]))
-      create(index(:resume_skills, [:user_id]))
-
-      execute(
-        "UPDATE resume_skills SET tenant_id = '#{default_tenant_id}'::uuid WHERE tenant_id IS NULL"
-      )
-    end
+    # Note: resume_skills table doesn't exist, skipping this section
+    # if needed in future, create the table with: create table(:resume_skills, primary_key: false)
 
     # Add tenant_id and user_id to roles (resume_roles) (idempotent)
     unless Ecto.Migration.column_exists?(:resume_roles, :tenant_id) do

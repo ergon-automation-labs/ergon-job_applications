@@ -4,7 +4,6 @@ defmodule BotArmyJobApplications.Repo.Migrations.EnforceTenantNotNull do
   def up do
     for table <- [
           :resumes,
-          :resume_skills,
           :resume_roles,
           :resume_bullets,
           :listings,
@@ -18,7 +17,6 @@ defmodule BotArmyJobApplications.Repo.Migrations.EnforceTenantNotNull do
   def down do
     for table <- [
           :resumes,
-          :resume_skills,
           :resume_roles,
           :resume_bullets,
           :listings,
