@@ -1,4 +1,4 @@
-defmodule BotArmyJobApplications.Repo.Migrations.EnforceTenantNotNull do
+defmodule BotArmyJobApplications.Repo.Migrations.EnforceTenantAndCompanyNotNull do
   use Ecto.Migration
 
   def up do
