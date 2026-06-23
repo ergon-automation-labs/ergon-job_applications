@@ -190,10 +190,10 @@ publish-release: release
 		echo "Failed to resolve version from mix.exs"; \
 		exit 1; \
 	fi; \
-	TARBALL=bot_army_job_applications-$$VERSION.tar.gz; \
+	TARBALL=job_applications_bot-$$VERSION.tar.gz; \
 	echo "Version: $$VERSION"; \
 	echo "Creating release tarball..."; \
-	tar -czf "$$TARBALL" -C _build/prod/rel bot_army_job_applications/; \
+	tar -czf "$$TARBALL" -C _build/prod/rel job_applications_bot/; \
 	echo "✓ Created: $$TARBALL"; \
 	echo "Publishing to GitHub releases..."; \
 	gh release create v$$VERSION "$$TARBALL" \
