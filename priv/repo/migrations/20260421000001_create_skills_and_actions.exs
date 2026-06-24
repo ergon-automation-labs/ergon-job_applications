@@ -2,7 +2,7 @@ defmodule BotArmyJobApplications.Repo.Migrations.CreateSkillsAndActions do
   use Ecto.Migration
 
   def change do
-    create table(:skills, primary_key: false) do
+    create_if_not_exists table(:skills, primary_key: false) do
       add(:id, :binary_id, primary_key: true)
       add(:tenant_id, :binary_id, null: false)
       add(:name, :text, null: false)
@@ -23,11 +23,7 @@ defmodule BotArmyJobApplications.Repo.Migrations.CreateSkillsAndActions do
       )
     )
 
-    create(
-      index(:skills, [:tenant_id, :is_active],
-        where: "is_active = true"
-      )
-    )
+    create(index(:skills, [:tenant_id, :is_active], where: "is_active = true"))
 
     create table(:tenant_actions, primary_key: false) do
       add(:id, :binary_id, primary_key: true)
@@ -42,10 +38,6 @@ defmodule BotArmyJobApplications.Repo.Migrations.CreateSkillsAndActions do
 
     create(index(:tenant_actions, [:tenant_id, :slug], unique: true))
 
-    create(
-      index(:tenant_actions, [:tenant_id, :is_active],
-        where: "is_active = true"
-      )
-    )
+    create(index(:tenant_actions, [:tenant_id, :is_active], where: "is_active = true"))
   end
 end
