@@ -59,6 +59,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     %{subject: "job.resume.create", type: :request_reply, description: "Create resume"},
     %{subject: "job.resume.update", type: :request_reply, description: "Update resume"},
     %{subject: "job.resume.delete", type: :request_reply, description: "Delete resume"},
+    %{subject: "job.resume.import", type: :request_reply, description: "Import resume from file"},
     %{subject: "job.pipeline.query", type: :request_reply, description: "Query pipeline"},
     %{
       subject: "requests.job_applications.snapshot",
@@ -568,6 +569,35 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
           else
             BotArmyRuntime.NATS.Reply.error(result["error"] || "create failed", :create_failed)
+          end
+
+        _ ->
+          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
+      end
+
+    if state.conn do
+      Gnat.pub(state.conn, reply_to, response)
+    end
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(
+        {:msg, %{topic: "job.resume.import", reply_to: reply_to, body: body} = _msg},
+        state
+      )
+      when is_binary(reply_to) and reply_to != "" do
+    # Request/reply: import resume from file with automatic text extraction and parsing
+    response =
+      case Jason.decode(body) do
+        {:ok, payload} when is_map(payload) ->
+          result = BotArmyJobApplications.Handlers.ResumeImportHandler.handle_import(payload)
+
+          if result["ok"] == true do
+            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+          else
+            BotArmyRuntime.NATS.Reply.error(result["error"] || "import failed", :import_failed)
           end
 
         _ ->
