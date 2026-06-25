@@ -588,6 +588,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         state
       )
       when is_binary(reply_to) and reply_to != "" do
+    Logger.info("[CONSUMER] Matched job.resume.import handler")
     # Request/reply: import resume from file with automatic text extraction and parsing
     response =
       case Jason.decode(body) do
@@ -673,6 +674,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
   @impl true
   def handle_info({:msg, msg}, state) do
+    if String.starts_with?(msg.topic, "job.resume") do
+      Logger.info("[CONSUMER CATCHALL] Received job.resume message on subject: #{msg.topic}")
+    end
+
     BotArmyRuntime.Tracing.with_consumer_span(msg.topic, Map.get(msg, :headers, []), fn ->
       Logger.debug("Received NATS message on subject: #{msg.topic}")
 
