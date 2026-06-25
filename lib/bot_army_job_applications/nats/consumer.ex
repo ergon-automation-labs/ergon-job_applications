@@ -194,6 +194,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             "job.resume.create",
             "job.resume.update",
             "job.resume.delete",
+            "job.resume.import",
             "events.llm.completion.job_applications.cover_letter",
             "events.llm.completion.job_applications.jd_analysis",
             "events.llm.completion.job_applications.scoring",
