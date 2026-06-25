@@ -26,7 +26,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
   alias BotArmyJobApplications.TextExtractor
   alias BotArmyJobApplications.ResumeStore
 
-  def handle_import(payload) when is_map(payload) do
+  def handle_import(payload, nats_conn) when is_map(payload) do
     Logger.info(
       "[ResumeImportHandler] handle_import called with payload keys: #{inspect(Map.keys(payload))}"
     )
@@ -50,7 +50,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
 
       true ->
         Logger.info("[ResumeImportHandler] validation passed, starting import")
-        import_resume(file_path, tenant_id, user_id)
+        import_resume(file_path, tenant_id, user_id, nats_conn)
     end
   end
 
@@ -62,11 +62,11 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
     %{"ok" => false, "error" => "invalid_payload", "stage" => "validation"}
   end
 
-  defp import_resume(file_path, tenant_id, user_id) do
+  defp import_resume(file_path, tenant_id, user_id, nats_conn) do
     Logger.info("[ResumeImportHandler] starting import_resume for #{file_path}")
 
     with {:ok, resume_text} <- extract_text(file_path),
-         {:ok, parsed_data} <- parse_resume(resume_text),
+         {:ok, parsed_data} <- parse_resume(resume_text, nats_conn),
          {:ok, resume} <- store_resume(parsed_data, tenant_id, user_id) do
       Logger.info("[ResumeImportHandler] import successful, resume_id=#{resume["id"]}")
 
@@ -114,7 +114,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
       {:error, "extraction failed: #{inspect(e)}", "extraction"}
   end
 
-  defp parse_resume(resume_text) do
+  defp parse_resume(resume_text, nats_conn) do
     Logger.info("[ResumeImportHandler] parse_resume starting")
 
     system_prompt = """
@@ -133,7 +133,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
 
     Logger.debug("[ResumeImportHandler] parse_resume: calling query_llm")
 
-    case query_llm(request) do
+    case query_llm(request, nats_conn) do
       {:ok, response} ->
         Logger.info("[ResumeImportHandler] parse_resume: got LLM response")
 
@@ -157,11 +157,8 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
       {:error, "parsing failed: #{inspect(e)}", "parsing"}
   end
 
-  defp query_llm(request) do
-    Logger.info("[ResumeImportHandler] query_llm: getting NATS connection")
-    nats_conn = Application.get_env(:bot_army_job_applications, :nats_conn)
-
-    Logger.debug("[ResumeImportHandler] query_llm: nats_conn=#{inspect(nats_conn)}")
+  defp query_llm(request, nats_conn) do
+    Logger.info("[ResumeImportHandler] query_llm starting")
 
     if nats_conn == nil do
       Logger.error("[ResumeImportHandler] query_llm: NATS connection not configured")
