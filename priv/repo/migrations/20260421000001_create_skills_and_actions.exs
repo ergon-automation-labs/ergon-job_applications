@@ -14,16 +14,25 @@ defmodule BotArmyJobApplications.Repo.Migrations.CreateSkillsAndActions do
       timestamps(type: :utc_datetime)
     end
 
-    create(index(:skills, [:tenant_id, :slug, :version], unique: true))
+    # Add missing columns if table already exists
+    unless column_exists?(:skills, :slug) do
+      alter table(:skills) do
+        add(:slug, :text, null: false, default: "")
+      end
 
-    create(
+      execute("UPDATE skills SET slug = '' WHERE slug IS NULL")
+    end
+
+    create_if_not_exists(index(:skills, [:tenant_id, :slug, :version], unique: true))
+
+    create_if_not_exists(
       index(:skills, [:tenant_id, :slug, :is_active],
         unique: true,
         where: "is_active = true"
       )
     )
 
-    create(index(:skills, [:tenant_id, :is_active], where: "is_active = true"))
+    create_if_not_exists(index(:skills, [:tenant_id, :is_active], where: "is_active = true"))
 
     create table(:tenant_actions, primary_key: false) do
       add(:id, :binary_id, primary_key: true)
