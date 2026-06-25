@@ -14,14 +14,24 @@ defmodule BotArmyJobApplications.Repo.Migrations.CreateSkillsAndActions do
       timestamps(type: :utc_datetime)
     end
 
-    # Add missing columns if table already exists
-    unless column_exists?(:skills, :slug) do
-      alter table(:skills) do
-        add(:slug, :text, null: false, default: "")
-      end
-
-      execute("UPDATE skills SET slug = '' WHERE slug IS NULL")
-    end
+    # Add missing columns if table already exists - use raw SQL to avoid dependency on column_exists?
+    execute("""
+      DO $$
+      BEGIN
+        IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'skills' AND column_name = 'slug') THEN
+          ALTER TABLE skills ADD COLUMN slug text NOT NULL DEFAULT '';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'skills' AND column_name = 'markdown_content') THEN
+          ALTER TABLE skills ADD COLUMN markdown_content text NOT NULL DEFAULT '';
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'skills' AND column_name = 'version') THEN
+          ALTER TABLE skills ADD COLUMN version integer NOT NULL DEFAULT 1;
+        END IF;
+        IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name = 'skills' AND column_name = 'is_active') THEN
+          ALTER TABLE skills ADD COLUMN is_active boolean NOT NULL DEFAULT true;
+        END IF;
+      END $$;
+    """)
 
     create_if_not_exists(index(:skills, [:tenant_id, :slug, :version], unique: true))
 
