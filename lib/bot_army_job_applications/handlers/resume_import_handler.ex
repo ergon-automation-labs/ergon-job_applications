@@ -164,9 +164,9 @@ defmodule BotArmyJobApplications.Handlers.ResumeImportHandler do
       Logger.error("[ResumeImportHandler] query_llm: NATS connection not configured")
       {:error, "nats connection not configured"}
     else
-      Logger.info("[ResumeImportHandler] query_llm: sending request to llm.converse")
+      Logger.info("[ResumeImportHandler] query_llm: sending request to llm.request.chat")
 
-      case Gnat.request(nats_conn, "llm.converse", Jason.encode!(request), timeout: 30_000) do
+      case Gnat.request(nats_conn, "llm.request.chat", Jason.encode!(request), timeout: 30_000) do
         {:ok, %{body: body}} ->
           Logger.info("[ResumeImportHandler] query_llm: got response")
 
