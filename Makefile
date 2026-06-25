@@ -1,7 +1,7 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 MIX ?= /Users/abby/.local/share/mise/shims/mix
 
-.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish deploy
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -43,9 +43,13 @@ help:
 	@echo "  make release         - Build OTP release locally"
 	@echo "  make publish-release - Build, package, and publish to GitHub"
 	@echo ""
+	@echo "Deployment:"
+	@echo "  make deploy          - Deploy to production (requires published release)"
+	@echo ""
 	@echo "Normal workflow:"
 	@echo "  git push             - Fast compile+test validation"
 	@echo "  make push-and-publish - Push then publish release asset"
+	@echo "  make deploy          - Deploy to production"
 	@echo ""
 
 setup: init deps setup-hooks setup-db
@@ -284,3 +288,7 @@ scan: discover-boards scan-listings
 	@echo "  Monitor scan progress: tail -f /var/log/bot_army/job_applications.log"
 	@echo "  View discovered listings: make list-listings"
 	@echo ""
+
+deploy:
+	@echo "Deploying job_applications to production..."
+	@cd ~/code/elixir_bots && make deploy-bot BOT=job_applications
