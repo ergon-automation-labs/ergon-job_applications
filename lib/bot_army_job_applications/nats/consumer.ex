@@ -594,7 +594,8 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     response =
       case Jason.decode(body) do
         {:ok, payload} when is_map(payload) ->
-          result = BotArmyJobApplications.Handlers.ResumeImportHandler.handle_import(payload)
+          result =
+            BotArmyJobApplications.Handlers.ResumeImportHandler.handle_import(payload, state.conn)
 
           if result["ok"] == true do
             BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
