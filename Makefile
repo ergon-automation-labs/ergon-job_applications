@@ -1,7 +1,7 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 MIX ?= /Users/abby/.local/share/mise/shims/mix
 
-.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish deploy
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish sync-release-version deploy
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -161,7 +161,34 @@ restart:
 	docker compose restart
 
 push-and-publish:
-	@git push && $(MAKE) publish-release
+	@BOT_NAME=job_applications; \
+	LOG_FILE="/tmp/.push-and-publish-${BOT_NAME}-$$-$$(date +%s).log"; \
+	echo "📋 Logging to: $$LOG_FILE" && \
+	echo "=== PUSH AND PUBLISH PIPELINE ===" > "$$LOG_FILE" && \
+	echo "Timestamp: $$(date)" >> "$$LOG_FILE" && \
+	echo "Bot: $$BOT_NAME" >> "$$LOG_FILE" && \
+	echo "" >> "$$LOG_FILE" && \
+	echo "Step 1: git push (with pre-push validation)" >> "$$LOG_FILE" && \
+	if git push >> "$$LOG_FILE" 2>&1; then \
+		echo "✅ Push succeeded" && \
+		echo "Step 2: make publish-release" >> "$$LOG_FILE" && \
+		if $(MAKE) publish-release >> "$$LOG_FILE" 2>&1; then \
+			echo "✅ Publish succeeded" && \
+			echo "" >> "$$LOG_FILE" && \
+			echo "✅ PIPELINE COMPLETE" >> "$$LOG_FILE"; \
+		else \
+			echo "❌ Publish failed (see log)" && \
+			echo "❌ PIPELINE FAILED at publish-release" >> "$$LOG_FILE"; \
+			tail -30 "$$LOG_FILE"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ Push failed (see log)" && \
+		echo "❌ PIPELINE FAILED at git push" >> "$$LOG_FILE"; \
+		tail -30 "$$LOG_FILE"; \
+		exit 1; \
+	fi && \
+	echo "📋 Full log: $$LOG_FILE"
 
 logs:
 	docker compose logs -f job_applications
@@ -187,7 +214,18 @@ release: check
 	@echo "Location: _build/prod/rel/bot_army_job_applications/"
 	@echo ""
 
-publish-release: release
+HAS_RESPONDER_CHANGES := $(shell git diff --name-only origin/main 2>/dev/null | grep -qE 'lib/.*/(responders|nats|consumers)/|lib/.*/bridge.*\.ex|lib/.*/event.*\.ex' && echo 1 || echo 0)
+
+sync-release-version:
+	@VERSION=$$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\([^"]*\)".*/\1/p' mix.exs | head -n 1); \
+	if [ -z "$$VERSION" ]; then \
+		echo "❌ Failed to resolve version from mix.exs"; exit 1; \
+	fi; \
+	TIMESTAMP=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	echo "$$VERSION" > .release-published; \
+	echo "✅ Synced release version: v$$VERSION ($$TIMESTAMP)"
+
+publish-release:
 	@set -e; \
 	VERSION=$$(sed -n 's/^[[:space:]]*version:[[:space:]]*"\([^"]*\)".*/\1/p' mix.exs | head -n 1); \
 	if [ -z "$$VERSION" ]; then \
@@ -196,18 +234,41 @@ publish-release: release
 	fi; \
 	TARBALL=job_applications_bot-$$VERSION.tar.gz; \
 	echo "Version: $$VERSION"; \
-	echo "Creating release tarball..."; \
-	tar -czf "$$TARBALL" -C _build/prod/rel job_applications_bot/; \
-	echo "✓ Created: $$TARBALL"; \
+	echo ""; \
+	if [ -f "$$TARBALL" ]; then \
+		echo "✓ Tarball already exists locally: $$TARBALL (skipping rebuild)"; \
+	else \
+		echo "📦 Building release (tarball not found locally)..."; \
+		if [ "$(HAS_RESPONDER_CHANGES)" = "1" ] && [ "$(SKIP_INTEGRATION_GATE)" != "1" ]; then \
+			echo "🔒 Responder/NATS/bridge changes detected. Integration tests required before publish."; \
+			$(MAKE) test-integration || { echo "❌ Integration tests failed. Publish blocked."; exit 1; }; \
+			echo "✅ Integration tests passed."; \
+		else \
+			[ "$(HAS_RESPONDER_CHANGES)" = "1" ] && echo "⚠️  Skipping integration gate (SKIP_INTEGRATION_GATE=1)" || true; \
+		fi; \
+		$(MAKE) release; \
+		echo "Creating release tarball..."; \
+		tar -czf "$$TARBALL" -C _build/prod/rel job_applications_bot/; \
+		echo "✓ Created: $$TARBALL"; \
+	fi; \
+	echo ""; \
 	echo "Publishing to GitHub releases..."; \
-	gh release create v$$VERSION "$$TARBALL" \
-		--title "Release v$$VERSION" \
-		--notes "Job Applications Bot Elixir release v$$VERSION. Download and deploy with Jenkins." \
-		--draft=false; \
+	if gh release view "v$$VERSION" >/dev/null 2>&1; then \
+		gh release upload "v$$VERSION" "$$TARBALL" --clobber; \
+	else \
+		gh release create v$$VERSION "$$TARBALL" \
+			--title "Release v$$VERSION" \
+			--notes "Job Applications Bot Elixir release v$$VERSION" \
+			--draft=false; \
+	fi; \
 	echo "✓ Release published to GitHub"; \
 	echo ""; \
-	echo "Next steps:"; \
-	echo "1. Deploy via: make deploy-bot BOT=job_applications"; \
+	echo "Publishing deploy.release.requested to NATS..."; \
+	BOT_NAME=$$(basename $$(pwd) | sed 's/bot_army_//'); \
+	REPO_SLUG=$$(git config --get remote.origin.url | sed 's/.*\///; s/\.git$$//'); \
+	NATS_SERVERS=$${NATS_SERVERS:-nats://localhost:4222}; \
+	nats --server "$$NATS_SERVERS" pub deploy.release.requested "$$(jq -n --arg bot "$$BOT_NAME" --arg repo "$$REPO_SLUG" --arg version "$$VERSION" --arg tag "v$$VERSION" '{bot: $$bot, repo: $$repo, version: $$version, release_tag: $$tag}')" || { echo "⚠️  NATS publish failed (is NATS running?)"; }; \
+	echo "✓ Deploy event published (deploy_pipeline_bot will pick it up)"; \
 	echo ""
 
 discover-boards:
