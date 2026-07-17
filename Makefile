@@ -262,6 +262,7 @@ publish-release:
 			--draft=false; \
 	fi; \
 	echo "✓ Release published to GitHub"; \
+t$(MAKE) sync-release-version;
 	echo ""; \
 	echo "Publishing deploy.release.requested to NATS..."; \
 	BOT_NAME=$$(basename $$(pwd) | sed 's/bot_army_//'); \
