@@ -1,7 +1,7 @@
 SCRIPTS_DIRECTORY ?= $(abspath $(CURDIR)/../scripts)
 MIX ?= /Users/abby/.local/share/mise/shims/mix
 
-.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish sync-release-version deploy
+.PHONY: test-handlers test-stores test-nats test-integration test-full setup help deps test credo dialyzer coverage check format clean release publish-release publish-release-docker setup-hooks setup-db reset-db logs logs-server discover-boards discover-boards-yaml sync-boards sync-boards-dry-run scan scan-listings build build-docker build-native test-docker test-native start stop restart logs-all push-and-publish sync-release-version deploy pre-push-cleanup
 
 help:
 	@echo "BotArmyJobApplications - Job Applications Bot"
@@ -160,6 +160,18 @@ stop:
 restart:
 	docker compose restart
 
+pre-push-cleanup:
+	@echo "🧹 Cleaning up pre-push changes..."
+	@git restore git-hooks/pre-push || true
+	@if git diff --quiet mix.lock; then \
+		echo "✓ No lock file changes"; \
+	else \
+		echo "📋 Staging lock file changes..."; \
+		git add mix.lock; \
+		git commit -m "chore: lock file updates from pre-push validation" || true; \
+	fi
+	@echo "✓ Ready to push"
+
 push-and-publish:
 	@BOT_NAME=job_applications; \
 	LOG_FILE="/tmp/.push-and-publish-$${BOT_NAME}-$$-$$(date +%s).log"; \
@@ -168,10 +180,12 @@ push-and-publish:
 	echo "Timestamp: $$(date)" >> "$${LOG_FILE}" && \
 	echo "Bot: $${BOT_NAME}" >> "$${LOG_FILE}" && \
 	echo "" >> "$${LOG_FILE}" && \
-	echo "Step 1: git push (with pre-push validation)" >> "$${LOG_FILE}" && \
+	echo "Step 1: Clean up pre-push artifacts" >> "$${LOG_FILE}" && \
+	$(MAKE) pre-push-cleanup >> "$${LOG_FILE}" 2>&1 && \
+	echo "Step 2: git push (with pre-push validation)" >> "$${LOG_FILE}" && \
 	if git push >> "$${LOG_FILE}" 2>&1; then \
 		echo "✅ Push succeeded" && \
-		echo "Step 2: make publish-release" >> "$${LOG_FILE}" && \
+		echo "Step 3: make publish-release" >> "$${LOG_FILE}" && \
 		if $(MAKE) publish-release >> "$${LOG_FILE}" 2>&1; then \
 			echo "✅ Publish succeeded" && \
 			echo "" >> "$${LOG_FILE}" && \
