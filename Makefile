@@ -161,8 +161,14 @@ restart:
 	docker compose restart
 
 pre-push-cleanup:
-	@echo "🧹 Cleaning up pre-push changes..."
-	@git restore git-hooks/pre-push || true
+	@echo "🧹 Cleaning up pre-push artifacts..."
+	@if git diff --quiet git-hooks/pre-push; then \
+		echo "✓ No hook changes"; \
+	else \
+		echo "📋 Staging hook changes..."; \
+		git add git-hooks/pre-push; \
+		git commit -m "chore: sync pre-push hook" || true; \
+	fi
 	@if git diff --quiet mix.lock; then \
 		echo "✓ No lock file changes"; \
 	else \
