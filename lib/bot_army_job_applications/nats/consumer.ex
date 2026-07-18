@@ -165,9 +165,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
 
   @impl true
   def handle_continue(:connect, state) do
-    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5000) do
+    case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5000) do
       {:ok, conn} ->
-        BotArmyRuntime.NATS.Connection.subscribe_to_status()
+        BotArmyLibraryRuntime.NATS.Connection.subscribe_to_status()
         Logger.info("Connected to NATS, subscribing to job applications topics")
 
         subscriptions =
@@ -224,7 +224,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           end)
           |> Enum.filter(&(not is_nil(&1)))
 
-        BotArmyRuntime.Registry.register("job_applications", @subjects, @version)
+        BotArmyLibraryRuntime.Registry.register("job_applications", @subjects, @version)
         Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
         {:noreply, %{state | subscriptions: subscriptions, conn: conn}}
 
@@ -245,7 +245,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply pattern for pipeline info
     response =
-      BotArmyRuntime.NATS.Reply.ok(%{
+      BotArmyLibraryRuntime.NATS.Reply.ok(%{
         status: "ok",
         applications_count: get_applications_count()
       })
@@ -268,12 +268,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, %{"application_id" => app_id}} when is_binary(app_id) ->
           case application_store().get(tenant_id(), app_id) do
-            {:ok, app} -> BotArmyRuntime.NATS.Reply.ok(%{"application" => app})
-            {:error, :not_found} -> BotArmyRuntime.NATS.Reply.error("not_found", :not_found)
+            {:ok, app} -> BotArmyLibraryRuntime.NATS.Reply.ok(%{"application" => app})
+            {:error, :not_found} -> BotArmyLibraryRuntime.NATS.Reply.error("not_found", :not_found)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("missing application_id", :missing_application_id)
+          BotArmyLibraryRuntime.NATS.Reply.error("missing application_id", :missing_application_id)
       end
 
     if state.conn do
@@ -342,7 +342,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           # Remove jd_text from each listing to reduce payload size
           stripped = Enum.map(paginated, fn listing -> Map.delete(listing, "jd_text") end)
 
-          BotArmyRuntime.NATS.Reply.ok(%{
+          BotArmyLibraryRuntime.NATS.Reply.ok(%{
             "listings" => stripped,
             "total" => total,
             "offset" => offset,
@@ -351,7 +351,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           })
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("failed to list listings", :list_failed)
+          BotArmyLibraryRuntime.NATS.Reply.error("failed to list listings", :list_failed)
       end
 
     if state.conn do
@@ -373,14 +373,14 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         {:ok, %{"listing_id" => listing_id}} when is_binary(listing_id) ->
           case listing_store().get(tenant_id(), listing_id) do
             {:ok, listing} ->
-              BotArmyRuntime.NATS.Reply.ok(%{"listing" => listing})
+              BotArmyLibraryRuntime.NATS.Reply.ok(%{"listing" => listing})
 
             {:error, :not_found} ->
-              BotArmyRuntime.NATS.Reply.error("listing_not_found", :not_found)
+              BotArmyLibraryRuntime.NATS.Reply.error("listing_not_found", :not_found)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("missing_listing_id", :missing_listing_id)
+          BotArmyLibraryRuntime.NATS.Reply.error("missing_listing_id", :missing_listing_id)
       end
 
     if state.conn do
@@ -408,7 +408,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
         )
 
       {:error, _} ->
-        response = BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
+        response = BotArmyLibraryRuntime.NATS.Reply.error("invalid_json", :decode_error)
         if state.conn, do: Gnat.pub(state.conn, reply_to, response)
     end
 
@@ -421,8 +421,8 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     # Request/reply: return list of applications for LiveView
     response =
       case application_store().list(tenant_id()) do
-        {:ok, applications} -> BotArmyRuntime.NATS.Reply.ok(%{"applications" => applications})
-        _ -> BotArmyRuntime.NATS.Reply.error("failed to list applications", :list_failed)
+        {:ok, applications} -> BotArmyLibraryRuntime.NATS.Reply.ok(%{"applications" => applications})
+        _ -> BotArmyLibraryRuntime.NATS.Reply.error("failed to list applications", :list_failed)
       end
 
     if state.conn do
@@ -441,9 +441,9 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       when is_binary(reply_to) and reply_to != "" do
     # Request/reply: TUI snapshot format for job-applications-tui
     message = if is_binary(body), do: Jason.decode!(body), else: %{}
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     snapshot = BotArmyJobApplications.Handlers.TuiCommandHandler.get_snapshot(tenant_id)
-    response = BotArmyRuntime.NATS.Reply.ok(snapshot)
+    response = BotArmyLibraryRuntime.NATS.Reply.ok(snapshot)
 
     if state.conn do
       Gnat.pub(state.conn, reply_to, response)
@@ -517,8 +517,8 @@ defmodule BotArmyJobApplications.NATS.Consumer do
     # Request/reply: return list of resumes for surface
     response =
       case resume_store().list(tenant_id()) do
-        {:ok, resumes} -> BotArmyRuntime.NATS.Reply.ok(%{"resumes" => resumes})
-        _ -> BotArmyRuntime.NATS.Reply.error("failed to list resumes", :list_failed)
+        {:ok, resumes} -> BotArmyLibraryRuntime.NATS.Reply.ok(%{"resumes" => resumes})
+        _ -> BotArmyLibraryRuntime.NATS.Reply.error("failed to list resumes", :list_failed)
       end
 
     if state.conn do
@@ -539,12 +539,12 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       case Jason.decode(body) do
         {:ok, %{"resume_id" => resume_id}} when is_binary(resume_id) ->
           case resume_store().get(tenant_id(), resume_id) do
-            {:ok, resume} -> BotArmyRuntime.NATS.Reply.ok(%{"resume" => resume})
-            {:error, :not_found} -> BotArmyRuntime.NATS.Reply.error("not_found", :not_found)
+            {:ok, resume} -> BotArmyLibraryRuntime.NATS.Reply.ok(%{"resume" => resume})
+            {:error, :not_found} -> BotArmyLibraryRuntime.NATS.Reply.error("not_found", :not_found)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("missing resume_id", :missing_resume_id)
+          BotArmyLibraryRuntime.NATS.Reply.error("missing resume_id", :missing_resume_id)
       end
 
     if state.conn do
@@ -567,13 +567,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_create(payload)
 
           if result["ok"] == true do
-            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+            BotArmyLibraryRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
           else
-            BotArmyRuntime.NATS.Reply.error(result["error"] || "create failed", :create_failed)
+            BotArmyLibraryRuntime.NATS.Reply.error(result["error"] || "create failed", :create_failed)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
+          BotArmyLibraryRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
@@ -598,13 +598,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
             BotArmyJobApplications.Handlers.ResumeImportHandler.handle_import(payload, state.conn)
 
           if result["ok"] == true do
-            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+            BotArmyLibraryRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
           else
-            BotArmyRuntime.NATS.Reply.error(result["error"] || "import failed", :import_failed)
+            BotArmyLibraryRuntime.NATS.Reply.error(result["error"] || "import failed", :import_failed)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
+          BotArmyLibraryRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
@@ -629,13 +629,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           # If update succeeded, re-score all listings with new preferences
           if result["ok"] == true do
             BotArmyJobApplications.Handlers.RecommendationHandler.rescore_all()
-            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+            BotArmyLibraryRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
           else
-            BotArmyRuntime.NATS.Reply.error(result["error"] || "update failed", :update_failed)
+            BotArmyLibraryRuntime.NATS.Reply.error(result["error"] || "update failed", :update_failed)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
+          BotArmyLibraryRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
@@ -658,13 +658,13 @@ defmodule BotArmyJobApplications.NATS.Consumer do
           result = BotArmyJobApplications.Handlers.ResumeTuiHandler.handle_delete(payload)
 
           if result["ok"] == true do
-            BotArmyRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
+            BotArmyLibraryRuntime.NATS.Reply.ok(Map.delete(result, "ok"))
           else
-            BotArmyRuntime.NATS.Reply.error(result["error"] || "delete failed", :delete_failed)
+            BotArmyLibraryRuntime.NATS.Reply.error(result["error"] || "delete failed", :delete_failed)
           end
 
         _ ->
-          BotArmyRuntime.NATS.Reply.error("invalid_json", :decode_error)
+          BotArmyLibraryRuntime.NATS.Reply.error("invalid_json", :decode_error)
       end
 
     if state.conn do
@@ -680,10 +680,10 @@ defmodule BotArmyJobApplications.NATS.Consumer do
       Logger.info("[CONSUMER CATCHALL] Received job.resume message on subject: #{msg.topic}")
     end
 
-    BotArmyRuntime.Tracing.with_consumer_span(msg.topic, Map.get(msg, :headers, []), fn ->
+    BotArmyLibraryRuntime.Tracing.with_consumer_span(msg.topic, Map.get(msg, :headers, []), fn ->
       Logger.debug("Received NATS message on subject: #{msg.topic}")
 
-      case BotArmyCore.NATS.Decoder.decode(msg.body) do
+      case BotArmyLibraryCore.NATS.Decoder.decode(msg.body) do
         {:ok, decoded_message} ->
           route_message(decoded_message)
 
@@ -753,7 +753,7 @@ defmodule BotArmyJobApplications.NATS.Consumer do
   @impl true
   def handle_info(:registry_heartbeat, state) do
     if state.subscriptions != [] do
-      BotArmyRuntime.Registry.register("job_applications", @subjects, @version)
+      BotArmyLibraryRuntime.Registry.register("job_applications", @subjects, @version)
       Process.send_after(self(), :registry_heartbeat, @registry_heartbeat_ms)
     end
 

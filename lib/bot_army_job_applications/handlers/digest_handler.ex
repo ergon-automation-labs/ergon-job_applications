@@ -52,7 +52,7 @@ defmodule BotArmyJobApplications.Handlers.DigestHandler do
   Queries all applications, builds digest, and publishes to NATS.
   """
   def handle_request(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     case application_store().list(tenant_id) do
       {:ok, apps} ->
         digest = build_digest(apps)

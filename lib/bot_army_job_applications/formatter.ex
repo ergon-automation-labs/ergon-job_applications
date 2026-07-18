@@ -9,7 +9,7 @@ defmodule BotArmyJobApplications.Formatter do
   """
 
   require Logger
-  alias BotArmyRuntime.Personality.Formatter
+  alias BotArmyLibraryRuntime.Personality.Formatter
 
   @doc """
   Format opportunity discovered notification.

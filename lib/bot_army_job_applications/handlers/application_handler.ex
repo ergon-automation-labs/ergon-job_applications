@@ -15,7 +15,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
   alias BotArmyJobApplications.ApplicationSupervisor
   alias BotArmyJobApplications.ApplicationServer
   alias BotArmyJobApplications.NATS.Publisher
-  alias BotArmyCore.Tenant
+  alias BotArmyLibraryCore.Tenant
 
   @gtd_trigger_states ["phone_screen", "technical", "offer"]
 

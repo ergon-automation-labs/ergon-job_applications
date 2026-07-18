@@ -54,7 +54,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Creates application and starts ApplicationServer; publishes snapshot.
   """
   def handle_create(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     with {company, role, jd_url} <- resolve_company_and_role(tenant_id, payload),
@@ -156,7 +156,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Updates application in store; appends history event if state changed; publishes snapshot.
   """
   def handle_update(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     id = payload["id"]
     company = trim(payload["company"])
@@ -245,7 +245,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Deletes application from store, stops ApplicationServer if running, publishes snapshot.
   """
   def handle_delete(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     id = payload["id"]
 
@@ -283,7 +283,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Updates application state and history directly (no transition validation); publishes snapshot.
   """
   def handle_update_status(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     id = payload["id"]
     status = trim(payload["status"])
@@ -338,7 +338,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
   Appends note to application strategy; publishes snapshot.
   """
   def handle_add_note(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     id = payload["id"]
     note = trim(payload["note"])

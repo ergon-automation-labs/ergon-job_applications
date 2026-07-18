@@ -41,7 +41,7 @@ defmodule BotArmyJobApplications.Handlers.RankingHandler do
   ```
   """
   def handle_rank(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 

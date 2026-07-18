@@ -23,7 +23,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   Initiates the two-phase artifact generation pipeline.
   """
   def handle_request(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -76,7 +76,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   Receives LLM-generated response with JD tags and initiates resume composition.
   """
   def handle_jd_analysis_response(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     resume_id = source_metadata["resume_id"]
@@ -151,7 +151,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
   Receives LLM-generated cover letter text and completes artifact generation.
   """
   def handle_cover_letter_response(message) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     resume_id = source_metadata["resume_id"]

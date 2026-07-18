@@ -65,7 +65,7 @@ defmodule BotArmyJobApplications.PulsePublisher do
         true -> "nominal"
       end
 
-    BotArmyRuntime.SynapseHealth.publish(
+    BotArmyLibraryRuntime.SynapseHealth.publish(
       source: "bot_army_job_applications",
       service: "job_applications",
       health_signal: health_signal
@@ -148,7 +148,7 @@ defmodule BotArmyJobApplications.PulsePublisher do
   end
 
   defp publish_to_nats(pulse) do
-    case GenServer.call(BotArmyRuntime.NATS.Connection, :get_connection, 5_000) do
+    case GenServer.call(BotArmyLibraryRuntime.NATS.Connection, :get_connection, 5_000) do
       {:ok, conn} ->
         json = Jason.encode!(pulse)
 

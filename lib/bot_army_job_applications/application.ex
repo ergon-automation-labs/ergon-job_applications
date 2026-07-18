@@ -106,7 +106,7 @@ defmodule BotArmyJobApplications.Application do
     if @env == :test do
       children
     else
-      [{BotArmyLearning.OutcomeTracker, [repo: BotArmyJobApplications.Repo]} | children]
+      [{BotArmyLibraryLearning.OutcomeTracker, [repo: BotArmyJobApplications.Repo]} | children]
     end
   end
 
@@ -114,7 +114,7 @@ defmodule BotArmyJobApplications.Application do
     if @env == :test,
       do: children,
       else: [
-        {BotArmyRuntime.Health.Responder,
+        {BotArmyLibraryRuntime.Health.Responder,
          [bot_name: :job_applications, repo: BotArmyJobApplications.Repo, version: "0.2.55"]}
         | children
       ]

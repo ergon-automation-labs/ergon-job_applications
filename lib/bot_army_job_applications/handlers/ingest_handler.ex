@@ -18,7 +18,7 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
   def handle_ingest(message) when is_map(message) do
     Logger.debug("IngestHandler raw message keys: #{inspect(Map.keys(message))}")
     Logger.debug("IngestHandler payload: #{inspect(message["payload"], pretty: true, limit: 3)}")
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     Logger.debug("IngestHandler extracted payload: #{inspect(payload, limit: 5)}")
     store = listing_store()

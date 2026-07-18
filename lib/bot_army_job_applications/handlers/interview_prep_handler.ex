@@ -34,7 +34,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
   def handle_request(message, reply_to \\ nil, conn \\ nil)
 
   def handle_request(message, _reply_to, _conn) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: _user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
     application_id = payload["application_id"]
 
@@ -70,7 +70,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
   updates application artifacts, pushes to GTD.
   """
   def handle_llm_response(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     application_id = source_metadata["application_id"]
     payload = message["payload"] || %{}

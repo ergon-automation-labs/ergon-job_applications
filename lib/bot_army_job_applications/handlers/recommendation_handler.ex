@@ -36,7 +36,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   """
   def handle_recommend(message, reply_to, conn)
       when is_map(message) and is_binary(reply_to) and is_binary(reply_to) do
-    %{tenant_id: tenant_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"] || %{}
 
     case validate_recommend_payload(payload) do
@@ -140,7 +140,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
   parses score + reason, updates listing, pushes to GTD if >= 0.80.
   """
   def handle_llm_score_response(message) when is_map(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     listing_id = source_metadata["listing_id"]
     resume_id = source_metadata["resume_id"]

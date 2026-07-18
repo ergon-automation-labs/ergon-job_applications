@@ -47,7 +47,7 @@ defmodule BotArmyJobApplications.DigestScheduler do
   # Private functions
 
   defp run_digest do
-    default_tenant_id = BotArmyCore.Tenant.default_tenant_id()
+    default_tenant_id = BotArmyLibraryCore.Tenant.default_tenant_id()
     case application_store().list(default_tenant_id) do
       {:ok, apps} ->
         digest = BotArmyJobApplications.Handlers.DigestHandler.build_digest(apps)

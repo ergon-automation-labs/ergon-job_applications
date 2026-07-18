@@ -39,7 +39,7 @@ defmodule BotArmyJobApplications.Handlers.EmailSignalHandler do
   - {:error, :invalid_payload} if required fields are missing
   """
   def handle_email_signal(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     payload = message["payload"]
 
     case validate_payload(payload) do

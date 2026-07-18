@@ -81,8 +81,20 @@ reset-db:
 init:
 	@if [ ! -d .git ]; then git init; echo "Git initialized."; else echo "Git already initialized."; fi
 
+compile:
+	@LOG_FILE="/tmp/compile-applications-$$(date +%s).log"; \
+	echo "Compiling applications and logging to $$LOG_FILE..."; \
+	$(MIX) compile 2>&1 | tee "$$LOG_FILE"; \
+	echo "✓ Compilation log: $$LOG_FILE"
+
 deps:
 	$(MIX) deps.get
+
+compile:
+	@LOG_FILE="/tmp/compile-applications-$$(date +%s).log"; \
+	echo "Compiling applications and logging to $$LOG_FILE..."; \
+	$(MIX) compile 2>&1 | tee "$$LOG_FILE"; \
+	echo "✓ Compilation log: $$LOG_FILE"
 
 test:
 	$(MIX) test
@@ -351,3 +363,19 @@ scan: discover-boards scan-listings
 deploy:
 	@echo "Deploying job_applications to production..."
 	@cd ~/code/elixir_bots && make deploy-bot BOT=job_applications
+
+
+
+
+
+
+
+
+.PHONY: bump-version
+
+bump-version:
+	@if [ -z "$(BUMP)" ]; then \
+		echo "Usage: make bump-version BUMP=major|minor|patch"; \
+		exit 1; \
+	fi
+	@$(MAKE) -C .. bump-version BOT=$(shell basename $(CURDIR)) BUMP=$(BUMP)

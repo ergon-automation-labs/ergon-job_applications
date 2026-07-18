@@ -17,7 +17,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
   Extracts text and initiates LLM parsing.
   """
   def handle_upload(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     event_id = message["event_id"]
     payload = message["payload"]
 
@@ -49,7 +49,7 @@ defmodule BotArmyJobApplications.Handlers.ResumeParseHandler do
   Persists parsed resume to database.
   """
   def handle_parse_response(message) do
-    %{tenant_id: tenant_id, user_id: user_id} = BotArmyCore.Tenant.extract_context(message)
+    %{tenant_id: tenant_id, user_id: user_id} = BotArmyLibraryCore.Tenant.extract_context(message)
     source_metadata = message["source_metadata"] || %{}
     payload = message["payload"]
 
