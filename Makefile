@@ -178,8 +178,8 @@ pre-push-cleanup:
 		echo "✓ No hook changes"; \
 	else \
 		echo "📋 Staging hook changes..."; \
-		git add git-hooks/pre-push; \
-		git commit -m "chore: sync pre-push hook" || true; \
+		git add git-hooks/pre-push git-hooks/post-push; \
+		git commit -m "chore: sync hooks" || true; \
 	fi
 	@if git diff --quiet mix.lock; then \
 		echo "✓ No lock file changes"; \
