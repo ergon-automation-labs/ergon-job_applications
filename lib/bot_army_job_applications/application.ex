@@ -106,7 +106,11 @@ defmodule BotArmyJobApplications.Application do
     if @env == :test do
       children
     else
-      [{BotArmyLibraryLearning.OutcomeTracker, [repo: BotArmyJobApplications.Repo]} | children]
+      [
+        {BotArmyLibraryLearning.OutcomeTracker,
+         [name: BotArmyLibraryLearning.OutcomeTracker, repo: BotArmyJobApplications.Repo]}
+        | children
+      ]
     end
   end
 
