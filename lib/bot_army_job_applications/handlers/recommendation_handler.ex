@@ -170,7 +170,7 @@ defmodule BotArmyJobApplications.Handlers.RecommendationHandler do
     case listing_store().update(tenant_id, listing_id, %{
            "recommendation_score" => score,
            "recommendation_reason" => reason,
-           "scored_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+           "scored_at" => NaiveDateTime.utc_now() |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
          }) do
       {:ok, listing} ->
         Logger.info(

@@ -219,14 +219,14 @@ defmodule BotArmyJobApplications.ListingStore do
       "location" => listing.location,
       "coverage_score" => listing.coverage_score,
       "status" => listing.status,
-      "discovered_at" => if(listing.discovered_at, do: listing.discovered_at |> NaiveDateTime.to_iso8601(), else: nil),
-      "scored_at" => if(listing.scored_at, do: listing.scored_at |> NaiveDateTime.to_iso8601(), else: nil),
+      "discovered_at" => if(listing.discovered_at, do: listing.discovered_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(), else: nil),
+      "scored_at" => if(listing.scored_at, do: listing.scored_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(), else: nil),
       "dedup_hash" => listing.dedup_hash,
       "recommendation_score" => listing.recommendation_score,
       "recommendation_reason" => listing.recommendation_reason,
       "gtd_pushed" => listing.gtd_pushed,
-      "created_at" => listing.inserted_at |> NaiveDateTime.to_iso8601(),
-      "updated_at" => listing.updated_at |> NaiveDateTime.to_iso8601()
+      "created_at" => listing.inserted_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
+      "updated_at" => listing.updated_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 end

@@ -99,7 +99,7 @@ defmodule BotArmyJobApplications.Handlers.InterviewPrepHandler do
     updated_artifacts =
       Map.merge(existing_artifacts, %{
         "interview_prep_md" => prep_text,
-        "interview_prep_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+        "interview_prep_at" => NaiveDateTime.utc_now() |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
       })
 
     case application_store().update(tenant_id, application_id, %{

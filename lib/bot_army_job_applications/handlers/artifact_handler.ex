@@ -186,7 +186,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
             "composed_at" =>
               NaiveDateTime.utc_now()
               |> NaiveDateTime.truncate(:second)
-              |> NaiveDateTime.to_iso8601()
+              |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
           })
 
         case BotArmyJobApplications.ApplicationServer.set_artifacts(
@@ -247,7 +247,7 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
             "updated_at",
             NaiveDateTime.utc_now()
             |> NaiveDateTime.truncate(:second)
-            |> NaiveDateTime.to_iso8601()
+            |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
           )
 
         case BotArmyJobApplications.ApplicationServer.set_artifacts(application_id, artifacts) do
@@ -554,8 +554,8 @@ defmodule BotArmyJobApplications.Handlers.ArtifactHandler do
       "pending_signal" => app.pending_signal,
       "next_action" => app.next_action,
       "artifacts" => app.artifacts,
-      "created_at" => app.inserted_at |> NaiveDateTime.to_iso8601(),
-      "updated_at" => app.updated_at |> NaiveDateTime.to_iso8601()
+      "created_at" => app.inserted_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
+      "updated_at" => app.updated_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 

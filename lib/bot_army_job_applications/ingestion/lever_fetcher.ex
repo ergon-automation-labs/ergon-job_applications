@@ -61,7 +61,7 @@ defmodule BotArmyJobApplications.Ingestion.LeverFetcher do
       "jd_url" => posting["hostedUrl"],
       "jd_text" => jd_text,
       "salary_range" => salary_range,
-      "discovered_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+      "discovered_at" => NaiveDateTime.utc_now() |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 

@@ -59,7 +59,7 @@ defmodule BotArmyJobApplications.Handlers.IngestHandler do
   def handle_ingest(_), do: {:error, :invalid_payload}
 
   defp build_listing_attrs(payload, dedup_hash, tenant_id, user_id) do
-    now_iso = NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+    now_iso = NaiveDateTime.utc_now() |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
 
     %{
       "tenant_id" => tenant_id,

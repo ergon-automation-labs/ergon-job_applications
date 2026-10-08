@@ -367,8 +367,8 @@ defmodule BotArmyJobApplications.ResumeStore do
       "metadata" => resume.metadata,
       "source_file_path" => resume.source_file_path,
       "original_filename" => resume.original_filename,
-      "created_at" => resume.inserted_at |> NaiveDateTime.to_iso8601(),
-      "updated_at" => resume.updated_at |> NaiveDateTime.to_iso8601()
+      "created_at" => resume.inserted_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
+      "updated_at" => resume.updated_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 

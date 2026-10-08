@@ -277,8 +277,8 @@ defmodule BotArmyJobApplications.ApplicationServer do
       "pending_signal" => app.pending_signal,
       "next_action" => app.next_action,
       "artifacts" => app.artifacts,
-      "created_at" => app.inserted_at |> NaiveDateTime.to_iso8601(),
-      "updated_at" => app.updated_at |> NaiveDateTime.to_iso8601()
+      "created_at" => app.inserted_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
+      "updated_at" => app.updated_at |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 end

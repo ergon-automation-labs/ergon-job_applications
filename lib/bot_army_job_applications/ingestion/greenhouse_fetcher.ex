@@ -51,7 +51,7 @@ defmodule BotArmyJobApplications.Ingestion.GreenhouseFetcher do
       "jd_text" => job["content"] || "",
       "location" => location,
       "salary_range" => nil,
-      "discovered_at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+      "discovered_at" => NaiveDateTime.utc_now() |> BotArmyLibraryRuntime.Timestamp.utc_iso8601()
     }
   end
 

@@ -342,7 +342,7 @@ defmodule BotArmyJobApplications.Handlers.ApplicationHandler do
           "transitioned_at" =>
             NaiveDateTime.utc_now()
             |> NaiveDateTime.truncate(:second)
-            |> NaiveDateTime.to_iso8601(),
+            |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
           "metadata" => %{"reason" => "creation"}
         }
       ]

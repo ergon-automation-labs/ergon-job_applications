@@ -51,7 +51,7 @@ defmodule Mix.Tasks.JobApplications.ApplyFromListing do
                 %{
                   "from_state" => nil,
                   "to_state" => "identified",
-                  "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
+                  "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
                   "metadata" => %{"reason" => "apply_from_listing"}
                 }
               ]

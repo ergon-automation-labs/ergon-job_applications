@@ -54,7 +54,7 @@ defmodule BotArmyJobApplications.Commands do
        %{
          "from_state" => from_state,
          "to_state" => to_state,
-         "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601(),
+         "transitioned_at" => NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second) |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
          "metadata" => metadata
        }}
     else

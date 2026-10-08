@@ -111,7 +111,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
           "transitioned_at" =>
             NaiveDateTime.utc_now()
             |> NaiveDateTime.truncate(:second)
-            |> NaiveDateTime.to_iso8601(),
+            |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
           "metadata" => %{"reason" => "tui_create"}
         }
       ]
@@ -205,7 +205,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
         "transitioned_at" =>
           NaiveDateTime.utc_now()
           |> NaiveDateTime.truncate(:second)
-          |> NaiveDateTime.to_iso8601(),
+          |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
         "metadata" => %{"reason" => "tui_edit"}
       }
 
@@ -304,7 +304,7 @@ defmodule BotArmyJobApplications.Handlers.TuiCommandHandler do
             "transitioned_at" =>
               NaiveDateTime.utc_now()
               |> NaiveDateTime.truncate(:second)
-              |> NaiveDateTime.to_iso8601(),
+              |> BotArmyLibraryRuntime.Timestamp.utc_iso8601(),
             "metadata" => %{"triggered_by" => "tui"}
           }
 
