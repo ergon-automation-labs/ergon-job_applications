@@ -82,8 +82,11 @@ deps:
 _compile-impl:
 	@LOG_FILE="/tmp/compile-applications-$$(date +%s).log"; \
 	echo "Compiling applications and logging to $$LOG_FILE..."; \
+	set -o pipefail; \
 	$(MIX) compile 2>&1 | tee "$$LOG_FILE"; \
-	echo "✓ Compilation log: $$LOG_FILE"
+	rc=$$?; \
+	echo "✓ Compilation log: $$LOG_FILE"; \
+	exit $$rc
 
 test-handlers:
 	MIX_ENV=test $(MIX) test --only handlers --trace
